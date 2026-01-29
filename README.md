@@ -21,8 +21,8 @@ Add to your `packages.yml`:
 
 ```yaml
 packages:
-  - git: "https://github.com/your-org/dbt_query_profiler.git"
-    revision: v0.1.0
+  - git: "https://github.com/dbt-labs/dbt-query-profiler.git"
+    revision: main
 ```
 
 Then run:
@@ -309,4 +309,4 @@ Once enabled, queries are logged to the `duckdb_logs` view.
 
 ## License
 
-MIT
+Apache 2.0
