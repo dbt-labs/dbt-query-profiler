@@ -164,6 +164,13 @@ dbt run-operation dbt_query_profiler.print_query_plan \
 - Use `format: markdown` for readable plan tables
 - Account-level history requires `SNOWFLAKE.ACCOUNT_USAGE` access
 - Set `use_account_level_history: true` in vars for cross-user queries
+- Filter for dbt model refreshes by query type:
+  - Tables: `query_type: CREATE_TABLE_AS_SELECT`
+  - Views: `query_type: CREATE_VIEW`
+  ```bash
+  dbt run-operation dbt_query_profiler.print_query_history \
+    --args '{table_name: my_model, query_type: CREATE_TABLE_AS_SELECT, limit: 5}' --quiet
+  ```
 
 ### BigQuery
 - Query plans not available (raises error)
