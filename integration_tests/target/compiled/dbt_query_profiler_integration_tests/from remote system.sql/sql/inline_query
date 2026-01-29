@@ -1,0 +1,17 @@
+
+    
+    select
+        rowid as query_id,
+        message as query_text,
+        cast(null as varchar) as user_name,
+        cast(null as varchar) as warehouse_name,
+        cast(null as varchar) as query_type,
+        cast(null as varchar) as query_tag,
+        timestamp as start_time,
+        cast(null as bigint) as total_elapsed_time
+    from duckdb_logs
+    where type = 'QueryLog'
+        and message not like '%dbt_query_profiler%'
+    
+    order by timestamp desc
+    limit 3

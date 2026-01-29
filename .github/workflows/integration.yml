@@ -1,0 +1,107 @@
+# Integration tests for cloud adapters
+# Runs on schedule (weekly) or manually triggered
+
+name: Cloud Integration Tests
+
+on:
+  schedule:
+    # Weekly on Monday at 6 AM UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      adapter:
+        description: 'Adapter to test (leave empty for all)'
+        type: choice
+        required: false
+        default: 'all'
+        options:
+          - all
+          - snowflake
+          - bigquery
+          - databricks
+          - redshift
+
+env:
+  PYTHON_VERSION: "3.11"
+  DBT_PROFILES_DIR: ./integration_tests/profiles
+
+jobs:
+  determine-adapters:
+    name: Determine adapters to test
+    runs-on: ubuntu-latest
+    outputs:
+      adapters: ${{ steps.set-adapters.outputs.adapters }}
+    steps:
+      - name: Set adapter matrix
+        id: set-adapters
+        run: |
+          if [ "${{ inputs.adapter }}" == "all" ] || [ -z "${{ inputs.adapter }}" ]; then
+            echo 'adapters=["snowflake","bigquery","databricks","redshift"]' >> $GITHUB_OUTPUT
+          else
+            echo 'adapters=["${{ inputs.adapter }}"]' >> $GITHUB_OUTPUT
+          fi
+
+  integration:
+    name: Integration (${{ matrix.adapter }})
+    runs-on: ubuntu-latest
+    needs: [determine-adapters]
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: ${{ fromJson(needs.determine-adapters.outputs.adapters) }}
+        include:
+          - adapter: snowflake
+            dbt_package: dbt-snowflake
+          - adapter: bigquery
+            dbt_package: dbt-bigquery
+          - adapter: databricks
+            dbt_package: dbt-databricks
+          - adapter: redshift
+            dbt_package: dbt-redshift
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dbt
+        run: |
+          python -m pip install --upgrade pip
+          pip install ${{ matrix.dbt_package }}
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run integration tests
+        run: tox -e dbt_integration_${{ matrix.adapter }}
+        env:
+          # Snowflake
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER }}
+          DBT_ENV_SECRET_SNOWFLAKE_PASS: ${{ secrets.SNOWFLAKE_PASS }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ vars.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+          # BigQuery
+          BIGQUERY_PROJECT: ${{ vars.BIGQUERY_PROJECT }}
+          BIGQUERY_KEYFILE_JSON: ${{ secrets.BIGQUERY_KEYFILE_JSON }}
+          BIGQUERY_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+          BIGQUERY_LOCATION: ${{ vars.BIGQUERY_LOCATION }}
+          # Databricks
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}
+          DBT_ENV_SECRET_DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
+          DATABRICKS_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+          # Redshift
+          REDSHIFT_HOST: ${{ vars.REDSHIFT_HOST }}
+          REDSHIFT_USER: ${{ vars.REDSHIFT_USER }}
+          DBT_ENV_SECRET_REDSHIFT_PASS: ${{ secrets.REDSHIFT_PASS }}
+          REDSHIFT_DATABASE: ${{ vars.REDSHIFT_DATABASE }}
+          REDSHIFT_PORT: ${{ vars.REDSHIFT_PORT }}
+          REDSHIFT_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"

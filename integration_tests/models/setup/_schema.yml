@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: setup_enable_logging
+    description: |
+      Enables DuckDB query logging. For other adapters, this is a no-op placeholder.
+      Must run before setup_test_queries to ensure queries are logged.
+
+  - name: setup_test_queries
+    description: |
+      Creates test data with a unique marker string that can be found in query history.
+      Used to test get_query_history, get_query_sql, get_query_plan, and get_query_stats.
+    columns:
+      - name: id
+        description: Unique identifier
+      - name: marker
+        description: Test marker string for filtering in query history
+      - name: created_at
+        description: Timestamp when record was created

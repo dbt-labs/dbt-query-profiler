@@ -1,0 +1,21 @@
+version: 2
+
+tests:
+  # Query History tests
+  - name: test_get_query_history_returns_results
+    description: Verifies get_query_history returns results with expected columns
+
+  - name: test_get_query_history_filters_by_table
+    description: Verifies table_name filter works correctly
+
+  # Query SQL tests
+  - name: test_get_query_sql_returns_text
+    description: Verifies get_query_sql returns the SQL text for a query
+
+  # Query Plan tests
+  - name: test_get_query_plan_returns_plan
+    description: Verifies get_query_plan returns execution plan (disabled for BigQuery)
+
+  # Query Stats tests
+  - name: test_get_query_stats_returns_metrics
+    description: Verifies get_query_stats returns execution statistics

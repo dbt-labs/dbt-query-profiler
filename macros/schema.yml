@@ -1,0 +1,159 @@
+version: 2
+
+macros:
+  - name: get_query_history
+    description: |
+      Returns SQL to query the data warehouse's query history with flexible filters.
+
+      **Supported adapters:** Snowflake, BigQuery, Databricks, Redshift, DuckDB
+
+      By default, uses user-scoped views (no special permissions). Set `use_account_level_history: true` for broader access.
+
+      **DuckDB note:** Requires logging enabled with `CALL enable_logging('QueryLog');`
+    arguments:
+      - name: table_name
+        type: string
+        description: Filter by table name in query text (case-insensitive partial match)
+      - name: user_name
+        type: string
+        description: Filter by user. Defaults to target.user. Set to empty string to disable filter.
+      - name: query_type
+        type: string
+        description: Filter by query type (e.g., 'SELECT', 'INSERT', 'CREATE_TABLE_AS_SELECT')
+      - name: limit
+        type: integer
+        description: Number of queries to return. Default 1.
+      - name: result_limit
+        type: integer
+        description: Number of queries to look back through. Default 100, max 10000 (Snowflake).
+
+  - name: print_query_history
+    description: |
+      Executes get_query_history and prints results as a JSON array.
+      Self-excludes its own queries from results (via query tags or comments).
+
+      **Usage:** `dbt run-operation print_query_history --args '{limit: 5, query_type: SELECT}'`
+    arguments:
+      - name: table_name
+        type: string
+        description: Filter by table name in query text (case-insensitive partial match)
+      - name: user_name
+        type: string
+        description: Filter by user. Defaults to target.user. Set to empty string to disable filter.
+      - name: query_type
+        type: string
+        description: Filter by query type (e.g., 'SELECT', 'INSERT', 'CREATE_TABLE_AS_SELECT')
+      - name: limit
+        type: integer
+        description: Number of queries to return. Default 1.
+      - name: result_limit
+        type: integer
+        description: Number of queries to look back through. Default 100, max 10000 (Snowflake).
+
+  - name: get_query_sql
+    description: |
+      Returns SQL to retrieve the query text for a given query ID.
+
+      **Supported adapters:** Snowflake, BigQuery, Databricks, Redshift, DuckDB
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB rowid)
+
+  - name: print_query_sql
+    description: |
+      Executes get_query_sql and prints the SQL text for a given query ID.
+
+      **Usage:** `dbt run-operation print_query_sql --args '{query_id: "01b3a4f2-..."}'`
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB rowid)
+
+  - name: get_query_plan
+    description: |
+      Returns SQL to retrieve the query execution plan/operator statistics.
+
+      **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
+
+      BigQuery does not expose operator-level execution statistics via SQL.
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID
+
+  - name: print_query_plan
+    description: |
+      Prints the query execution plan for a given query ID.
+
+      **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
+
+      **Usage:** `dbt run-operation print_query_plan --args '{query_id: "...", format: "text"}'`
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID
+      - name: format
+        type: string
+        description: |
+          Output format:
+          - 'json' (default): Full details as JSON
+          - 'text': Compact terminal-friendly output
+          - 'markdown': Table format (Snowflake only)
+          - 'graphviz': DOT format for Graphviz (DuckDB only)
+          - 'html': HTML output (DuckDB only)
+
+  - name: get_query_plan_summary
+    description: |
+      Returns SQL for a summarized view of the query plan with key metrics extracted.
+
+      **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID
+
+  - name: get_query_stats
+    description: |
+      Returns SQL to retrieve execution statistics for a given query ID.
+      Provides high-level resource usage metrics (bytes, time, cache, etc.).
+
+      **Supported adapters:** Snowflake, BigQuery, Databricks, Redshift, DuckDB
+
+      **Snowflake metrics:** bytes_scanned, bytes_written_to_result, rows_produced, compilation_time, queue_time, credits
+
+      **BigQuery metrics:** bytes_processed, bytes_billed, cache_hit, slot_ms, bi_engine_mode, dml_statistics, resource_warnings
+
+      **Databricks metrics:** bytes_scanned, bytes_written, rows_produced, read_rows, compilation_duration, execution_duration, queue_time, cache_hit, spilled_local_bytes, shuffle_read_bytes
+
+      **Redshift metrics:** returned_bytes, returned_rows, compile_time, execution_time, queue_time, planning_time, result_cache_hit
+
+      **DuckDB metrics:** Uses EXPLAIN ANALYZE (re-executes query) - timing, rows, operator-level stats
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, or Redshift query_id)
+      - name: result_limit
+        type: integer
+        description: Number of queries to look back through. Default 10000, max 10000 (Snowflake).
+
+  - name: print_query_stats
+    description: |
+      Executes get_query_stats and prints execution statistics for a given query ID.
+
+      **Supported adapters:** Snowflake, BigQuery, Databricks, Redshift, DuckDB
+
+      **Usage:** `dbt run-operation print_query_stats --args '{query_id: "...", format: "text"}'`
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, or Redshift query_id)
+      - name: format
+        type: string
+        description: |
+          Output format:
+          - 'json' (default): Full details as JSON object
+          - 'text': Compact terminal-friendly output
+      - name: result_limit
+        type: integer
+        description: Number of queries to look back through. Default 10000, max 10000 (Snowflake).

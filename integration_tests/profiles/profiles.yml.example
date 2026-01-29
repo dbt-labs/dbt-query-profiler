@@ -1,0 +1,56 @@
+# Example profiles for local development
+# Copy to ~/.dbt/profiles.yml and fill in your credentials
+#
+# For CI, set these as environment variables instead
+
+integration_tests:
+  target: duckdb  # Change to your preferred adapter
+
+  outputs:
+    # DuckDB - Local, no credentials needed
+    duckdb:
+      type: duckdb
+      path: ':memory:'  # Or path to a .duckdb file
+      threads: 4
+
+    # Snowflake
+    snowflake:
+      type: snowflake
+      account: your_account
+      user: your_user
+      password: your_password  # Or use authenticator: externalbrowser
+      role: your_role
+      database: your_database
+      warehouse: your_warehouse
+      schema: dbt_query_profiler_tests
+      threads: 4
+
+    # BigQuery
+    bigquery:
+      type: bigquery
+      method: oauth  # Or service-account
+      project: your_project
+      dataset: dbt_query_profiler_tests
+      location: US
+      threads: 4
+
+    # Databricks
+    databricks:
+      type: databricks
+      host: your_workspace.cloud.databricks.com
+      http_path: /sql/1.0/warehouses/your_warehouse_id
+      token: your_token
+      catalog: hive_metastore
+      schema: dbt_query_profiler_tests
+      threads: 4
+
+    # Redshift
+    redshift:
+      type: redshift
+      host: your_cluster.region.redshift.amazonaws.com
+      user: your_user
+      password: your_password
+      dbname: your_database
+      port: 5439
+      schema: dbt_query_profiler_tests
+      threads: 4

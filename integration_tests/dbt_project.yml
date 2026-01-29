@@ -1,0 +1,35 @@
+name: 'dbt_query_profiler_integration_tests'
+version: '0.1.0'
+config-version: 2
+
+profile: 'integration_tests'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+# Enable DuckDB logging at session start
+on-run-start:
+  - "{{ dbt_query_profiler_integration_tests.enable_duckdb_logging() }}"
+
+# Dispatch to the package macros
+dispatch:
+  - macro_namespace: dbt_query_profiler
+    search_order: ['dbt_query_profiler_integration_tests', 'dbt_query_profiler']
+
+models:
+  dbt_query_profiler_integration_tests:
+    # Setup models create query history for testing
+    setup:
+      +materialized: table
+      +tags: ['setup']
+
+vars:
+  # Test markers - unique strings to identify test queries
+  test_marker: 'test_query_profiler_marker'

@@ -1,0 +1,51 @@
+# CI profiles for integration tests
+# All credentials are read from environment variables
+
+integration_tests:
+  target: duckdb
+
+  outputs:
+    duckdb:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'target/test.duckdb') }}"
+      threads: 4
+
+    snowflake:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('DBT_ENV_SECRET_SNOWFLAKE_PASS') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'dbt_query_profiler_tests') }}"
+      threads: 4
+
+    bigquery:
+      type: bigquery
+      method: service-account-json
+      project: "{{ env_var('BIGQUERY_PROJECT') }}"
+      dataset: "{{ env_var('BIGQUERY_SCHEMA', 'dbt_query_profiler_tests') }}"
+      location: "{{ env_var('BIGQUERY_LOCATION', 'US') }}"
+      threads: 4
+      keyfile_json: "{{ env_var('BIGQUERY_KEYFILE_JSON') | as_native }}"
+      job_retries: 3
+
+    databricks:
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST') }}"
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH') }}"
+      token: "{{ env_var('DBT_ENV_SECRET_DATABRICKS_TOKEN') }}"
+      catalog: "{{ env_var('DATABRICKS_CATALOG', 'hive_metastore') }}"
+      schema: "{{ env_var('DATABRICKS_SCHEMA', 'dbt_query_profiler_tests') }}"
+      threads: 4
+
+    redshift:
+      type: redshift
+      host: "{{ env_var('REDSHIFT_HOST') }}"
+      user: "{{ env_var('REDSHIFT_USER') }}"
+      password: "{{ env_var('DBT_ENV_SECRET_REDSHIFT_PASS') }}"
+      dbname: "{{ env_var('REDSHIFT_DATABASE') }}"
+      port: "{{ env_var('REDSHIFT_PORT', '5439') | as_number }}"
+      schema: "{{ env_var('REDSHIFT_SCHEMA', 'dbt_query_profiler_tests') }}"
+      threads: 4

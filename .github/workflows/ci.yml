@@ -1,0 +1,84 @@
+# CI workflow - runs on every PR and push to main
+# Tier 1: Compilation tests for all adapters (no credentials needed)
+# Tier 2: DuckDB integration tests (free, local)
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  DBT_PROFILES_DIR: ./integration_tests/profiles
+
+jobs:
+  # Tier 1: Verify macros compile for all adapters
+  compile:
+    name: Compile (${{ matrix.adapter }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [snowflake, bigquery, databricks, redshift, duckdb]
+        include:
+          - adapter: snowflake
+            dbt_package: dbt-snowflake
+          - adapter: bigquery
+            dbt_package: dbt-bigquery
+          - adapter: databricks
+            dbt_package: dbt-databricks
+          - adapter: redshift
+            dbt_package: dbt-redshift
+          - adapter: duckdb
+            dbt_package: dbt-duckdb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dbt
+        run: |
+          python -m pip install --upgrade pip
+          pip install ${{ matrix.dbt_package }}
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run compilation test
+        run: tox -e compile_${{ matrix.adapter }}
+
+  # Tier 2: Full integration tests with DuckDB
+  integration-duckdb:
+    name: Integration (DuckDB)
+    runs-on: ubuntu-latest
+    needs: [compile]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dbt-duckdb
+        run: |
+          python -m pip install --upgrade pip
+          pip install dbt-duckdb
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run DuckDB integration tests
+        run: tox -e dbt_integration_duckdb
+        env:
+          DUCKDB_PATH: ":memory:"
