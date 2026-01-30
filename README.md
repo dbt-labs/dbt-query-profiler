@@ -6,17 +6,17 @@ A dbt package for querying and analyzing query history and execution plans acros
 
 | Feature | Snowflake | BigQuery | Databricks | Redshift | DuckDB |
 |---------|:---------:|:--------:|:----------:|:--------:|:------:|
-| Query History | ✅ | ✅ | ✅ | ✅ | ✅* |
-| Query SQL | ✅ | ✅ | ✅ | ✅ | ✅* |
+| Query History | ✅ | ✅ | ✅*** | ✅ | ✅* |
+| Query SQL | ✅ | ✅ | ✅*** | ✅ | ✅* |
 | Query Plan (EXPLAIN) | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Execution Plan | ✅ | ❌ | ✅*** | ✅ | ✅* |
-| Query Stats | ✅ | ✅ | ✅ | ✅ | ✅** |
+| Query Stats | ✅ | ✅ | ✅*** | ✅ | ✅** |
 
 \* DuckDB requires logging enabled with `CALL enable_logging('QueryLog');`
 
 \** DuckDB query stats **re-executes the query** via `EXPLAIN ANALYZE`
 
-\*** Databricks execution plan requires access to `system.query.history`
+\*** Databricks requires access to `system.query.history` (Query Plan works without it)
 
 ## Installation
 
@@ -270,7 +270,7 @@ GRANT USE SCHEMA ON SCHEMA system.query TO `user@example.com`;
 GRANT SELECT ON TABLE system.query.history TO `user@example.com`;
 ```
 
-**Query Plan:** Uses `EXPLAIN` on the original query text (no additional permissions beyond query history access)
+**Query Plan:** Uses `EXPLAIN` directly on SQL you provide - no `system.query.history` access required
 
 ### Redshift
 
@@ -313,10 +313,11 @@ Once enabled, queries are logged to the `duckdb_logs` view.
 
 ### Databricks
 
-- Uses `system.query.history` system table
+- Uses `system.query.history` system table for Query History, Query SQL, Execution Plan, and Query Stats
 - **User-scoped (default):** Filters by `current_user()` - only your own queries
 - **Account-level:** Shows all users' queries (requires same permissions)
-- Query plan uses `EXPLAIN` on the original query text (retrieved from query history)
+- **Query Plan:** Uses `EXPLAIN` directly on SQL you provide - does NOT require `system.query.history` access
+- **Execution Plan:** Retrieves SQL from query history, then runs EXPLAIN - requires `system.query.history` access
 - The `statement_id` can be found in the Query History UI or SQL warehouse logs
 
 ### Redshift
