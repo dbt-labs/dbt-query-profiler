@@ -6,10 +6,10 @@ A dbt package for querying and analyzing query history and execution plans acros
 
 | Feature | Snowflake | BigQuery | Databricks | Redshift | DuckDB |
 |---------|:---------:|:--------:|:----------:|:--------:|:------:|
-| Query History | ✓ | ✓ | ✓ | ✓ | ✓* |
-| Query SQL | ✓ | ✓ | ✓ | ✓ | ✓* |
-| Query Plan | ✓ | ✗ | ✓ | ✓ | ✓* |
-| Query Stats | ✓ | ✓ | ✓ | ✓ | ✓** |
+| Query History | ✅ | ✅ | ✅ | ✅ | ✅* |
+| Query SQL | ✅ | ✅ | ✅ | ✅ | ✅* |
+| Query Plan | ✅ | ❌ | ✅ | ✅ | ✅* |
+| Query Stats | ✅ | ✅ | ✅ | ✅ | ✅** |
 
 \* DuckDB requires logging enabled with `CALL enable_logging('QueryLog');`
 
