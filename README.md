@@ -8,12 +8,15 @@ A dbt package for querying and analyzing query history and execution plans acros
 |---------|:---------:|:--------:|:----------:|:--------:|:------:|
 | Query History | ✅ | ✅ | ✅ | ✅ | ✅* |
 | Query SQL | ✅ | ✅ | ✅ | ✅ | ✅* |
-| Query Plan | ✅ | ❌ | ✅ | ✅ | ✅* |
+| Query Plan (EXPLAIN) | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Execution Plan | ✅ | ❌ | ✅*** | ✅ | ✅* |
 | Query Stats | ✅ | ✅ | ✅ | ✅ | ✅** |
 
 \* DuckDB requires logging enabled with `CALL enable_logging('QueryLog');`
 
 \** DuckDB query stats **re-executes the query** via `EXPLAIN ANALYZE`
+
+\*** Databricks execution plan requires access to `system.query.history`
 
 ## Installation
 
@@ -70,18 +73,34 @@ Get the SQL text for a specific query:
 dbt run-operation print_query_sql --args '{query_id: "01c20db1-060a-bcad-0004-7d832cd6b002"}'
 ```
 
-### Query Plan
+### Query Plan (Estimated)
 
-Get the execution plan for a query:
+Get the estimated execution plan for any SQL query using EXPLAIN:
+```bash
+# From raw SQL
+dbt run-operation print_query_plan --args '{sql: "SELECT * FROM my_table WHERE id = 1"}'
+
+# From a dbt model (gets compiled SQL and runs EXPLAIN)
+dbt run-operation print_query_plan_model --args '{model_name: "my_model"}'
+
+# With format option
+dbt run-operation print_query_plan --args '{sql: "SELECT 1", format: text}'
+```
+
+**Note:** This runs EXPLAIN on the SQL without executing it. No query history access required.
+
+### Execution Plan (Actual)
+
+Get the actual execution plan from a previously run query:
 ```bash
 # JSON format (default)
-dbt run-operation print_query_plan --args '{query_id: "01c20db1-..."}'
+dbt run-operation print_execution_plan --args '{query_id: "01c20db1-..."}'
 
 # Text format (terminal-friendly)
-dbt run-operation print_query_plan --args '{query_id: "01c20db1-...", format: text}'
+dbt run-operation print_execution_plan --args '{query_id: "01c20db1-...", format: text}'
 
 # Markdown table (Snowflake only)
-dbt run-operation print_query_plan --args '{query_id: "01c20db1-...", format: markdown}'
+dbt run-operation print_execution_plan --args '{query_id: "01c20db1-...", format: markdown}'
 ```
 
 Example text output (Snowflake):
@@ -91,6 +110,8 @@ Example text output (Snowflake):
 [2] Join  (in: 256, out: 128, time: 0%)
 [3] TableScan  (in: -, out: 128, time: 0%)
 ```
+
+**Note:** This retrieves actual execution statistics from the query history. Requires query history access.
 
 ### Query Stats
 
@@ -171,17 +192,31 @@ Cache Hit:    True
 **Arguments:**
 - `query_id` (string): The query ID
 
-### Query Plan
+### Query Plan (Estimated)
 
 | Macro | Description |
 |-------|-------------|
-| `get_query_plan()` | Returns SQL for execution plan |
-| `print_query_plan()` | Prints plan in json/text/markdown format |
-| `get_query_plan_summary()` | Returns SQL for summarized plan metrics |
+| `get_query_plan(sql)` | Returns EXPLAIN output for the given SQL |
+| `print_query_plan(sql)` | Prints EXPLAIN output |
+| `get_query_plan_model(model_name)` | Gets compiled SQL from dbt model and returns EXPLAIN |
+| `print_query_plan_model(model_name)` | Prints EXPLAIN for a dbt model |
 
 **Arguments:**
-- `query_id` (string): The query ID
-- `format` (string): Output format - 'json', 'text', or 'markdown' (Snowflake); 'text' or 'json' (others)
+- `sql` (string): The SQL query to explain
+- `model_name` (string): Name of the dbt model (for `*_model` macros)
+- `format` (string): Output format - 'text' (default), 'json'
+
+### Execution Plan (Actual)
+
+| Macro | Description |
+|-------|-------------|
+| `get_execution_plan(query_id)` | Returns actual execution statistics for a query |
+| `print_execution_plan(query_id)` | Prints execution plan in json/text/markdown format |
+| `get_execution_plan_summary(query_id)` | Returns summarized execution metrics |
+
+**Arguments:**
+- `query_id` (string): The query ID from query history
+- `format` (string): Output format - 'json', 'text', or 'markdown' (Snowflake)
 
 ### Query Stats
 
