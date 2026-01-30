@@ -1,4 +1,6 @@
 {% macro databricks__get_query_stats(query_id, result_limit) %}
+    {%- set custom_source = var('databricks_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
     select
         statement_id as query_id,
         statement_type as query_type,
@@ -24,12 +26,14 @@
         from_result_cache,
         spilled_local_bytes,
         shuffle_read_bytes
-    from system.query.history
+    from {{ source_table }}
     where statement_id = '{{ query_id }}'
 {% endmacro %}
 
 
 {% macro databricks__print_query_stats(query_id, format, result_limit) %}
+    {%- set custom_source = var('databricks_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
 
     {% if format == 'text' %}
         {% set query %}
@@ -41,7 +45,7 @@
                 produced_rows,
                 written_bytes,
                 from_result_cache
-            from system.query.history
+            from {{ source_table }}
             where statement_id = '{{ query_id }}'
         {% endset %}
 
@@ -81,7 +85,7 @@
                 spilled_local_bytes,
                 shuffle_read_bytes
             )) as stats
-            from system.query.history
+            from {{ source_table }}
             where statement_id = '{{ query_id }}'
         {% endset %}
 

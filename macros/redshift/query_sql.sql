@@ -1,6 +1,8 @@
 {% macro redshift__get_query_sql(query_id) %}
+    {%- set custom_source = var('redshift_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'sys_query_history' -%}
     select query_text
-    from sys_query_history
+    from {{ source_table }}
     where query_id = {{ query_id }}
 {% endmacro %}
 

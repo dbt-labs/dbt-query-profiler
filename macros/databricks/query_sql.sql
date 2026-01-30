@@ -1,6 +1,8 @@
 {% macro databricks__get_query_sql(query_id) %}
+    {%- set custom_source = var('databricks_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
     select statement_text as query_text
-    from system.query.history
+    from {{ source_table }}
     where statement_id = '{{ query_id }}'
 {% endmacro %}
 

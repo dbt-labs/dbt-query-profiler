@@ -1,4 +1,6 @@
 {% macro redshift__get_query_stats(query_id, result_limit) %}
+    {%- set custom_source = var('redshift_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'sys_query_history' -%}
     select
         query_id,
         query_type,
@@ -16,12 +18,14 @@
         planning_time / 1000 as planning_time_ms,
         lock_wait_time / 1000 as lock_wait_time_ms,
         result_cache_hit
-    from sys_query_history
+    from {{ source_table }}
     where query_id = {{ query_id }}
 {% endmacro %}
 
 
 {% macro redshift__print_query_stats(query_id, format, result_limit) %}
+    {%- set custom_source = var('redshift_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'sys_query_history' -%}
 
     {% if format == 'text' %}
         {% set query %}
@@ -32,7 +36,7 @@
                 returned_bytes,
                 returned_rows,
                 result_cache_hit
-            from sys_query_history
+            from {{ source_table }}
             where query_id = {{ query_id }}
         {% endset %}
 
@@ -70,7 +74,7 @@
                     'result_cache_hit', result_cache_hit
                 )
             ) as stats
-            from sys_query_history
+            from {{ source_table }}
             where query_id = {{ query_id }}
         {% endset %}
 

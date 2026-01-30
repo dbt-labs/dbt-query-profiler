@@ -50,6 +50,24 @@ vars:
 | **Databricks** | `system.query.history` filtered by `current_user()` | `system.query.history` (all users) |
 | **Redshift** | `sys_query_history` filtered by user | `sys_query_history` (all users) |
 
+### Custom Query History Source
+
+If your admin provides access to query history via a custom view (instead of the default system tables), you can override the source:
+
+```yaml
+# dbt_project.yml
+vars:
+  # Use a custom view instead of the default system table
+  snowflake_query_history_source: "my_db.audit.query_history_view"
+  databricks_query_history_source: "main.audit.query_history_view"
+  bigquery_query_history_source: "my_project.audit.jobs_view"
+  redshift_query_history_source: "admin.query_history_view"
+```
+
+**Note:** When a custom source is set, `use_account_level_history` is ignored for that adapter. The custom view controls what data is accessible.
+
+Your custom view must have columns compatible with the expected schema (e.g., `query_id`, `query_text`, `user_name`, `start_time`, etc.).
+
 ## Usage
 
 ### Query History

@@ -1,6 +1,7 @@
 {% macro bigquery__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
     {%- set effective_user = user_name if user_name is not none else target.user -%}
     {%- set region = target.location if target.location else 'us' -%}
+    {%- set custom_source = var('bigquery_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
 
     select
@@ -12,7 +13,10 @@
         cast(null as string) as query_tag,
         creation_time as start_time,
         timestamp_diff(end_time, start_time, millisecond) as total_elapsed_time
-    {% if use_account_level %}
+    {% if custom_source %}
+    {# Custom source: user-provided view/table (use_account_level_history is ignored) #}
+    from {{ custom_source }}
+    {% elif use_account_level %}
     {# Project-level: all jobs in project (requires bigquery.jobs.list permission) #}
     from `region-{{ region }}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
     {% else %}

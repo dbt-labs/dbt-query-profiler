@@ -1,9 +1,12 @@
 {% macro bigquery__get_query_sql(query_id) %}
     {%- set region = target.location if target.location else 'us' -%}
+    {%- set custom_source = var('bigquery_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
 
     select query as query_text
-    {% if use_account_level %}
+    {% if custom_source %}
+    from {{ custom_source }}
+    {% elif use_account_level %}
     from `region-{{ region }}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
     {% else %}
     from `region-{{ region }}`.INFORMATION_SCHEMA.JOBS_BY_USER

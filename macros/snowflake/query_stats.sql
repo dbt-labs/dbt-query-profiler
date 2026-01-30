@@ -1,4 +1,5 @@
 {% macro snowflake__get_query_stats(query_id, result_limit) %}
+    {%- set custom_source = var('snowflake_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
 
     select
@@ -17,7 +18,9 @@
         execution_time as execution_time_only_ms,
         queued_provisioning_time as queue_time_ms,
         queued_overload_time as queue_overload_time_ms
-    {% if use_account_level %}
+    {% if custom_source %}
+    from {{ custom_source }}
+    {% elif use_account_level %}
     from snowflake.account_usage.query_history
     {% else %}
     from table(information_schema.query_history(result_limit => {{ result_limit }}))
@@ -27,6 +30,7 @@
 
 
 {% macro snowflake__print_query_stats(query_id, format, result_limit) %}
+    {%- set custom_source = var('snowflake_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
 
     {% if format == 'text' %}
@@ -38,7 +42,9 @@
                 bytes_scanned,
                 rows_produced,
                 bytes_written_to_result
-            {% if use_account_level %}
+            {% if custom_source %}
+            from {{ custom_source }}
+            {% elif use_account_level %}
             from snowflake.account_usage.query_history
             {% else %}
             from table(information_schema.query_history(result_limit => {{ result_limit }}))
@@ -78,7 +84,9 @@
                 'execution_time_only_ms', execution_time,
                 'queue_time_ms', queued_provisioning_time
             ) as stats
-            {% if use_account_level %}
+            {% if custom_source %}
+            from {{ custom_source }}
+            {% elif use_account_level %}
             from snowflake.account_usage.query_history
             {% else %}
             from table(information_schema.query_history(result_limit => {{ result_limit }}))

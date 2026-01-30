@@ -1,5 +1,6 @@
 {% macro bigquery__get_query_stats(query_id, result_limit) %}
     {%- set region = target.location if target.location else 'us' -%}
+    {%- set custom_source = var('bigquery_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
 
     select
@@ -22,7 +23,9 @@
         query_info.resource_warning as resource_warning,
         transferred_bytes,
         total_bytes_processed_accuracy
-    {% if use_account_level %}
+    {% if custom_source %}
+    from {{ custom_source }}
+    {% elif use_account_level %}
     from `region-{{ region }}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
     {% else %}
     from `region-{{ region }}`.INFORMATION_SCHEMA.JOBS_BY_USER
@@ -33,8 +36,9 @@
 
 {% macro bigquery__print_query_stats(query_id, format, result_limit) %}
     {%- set region = target.location if target.location else 'us' -%}
+    {%- set custom_source = var('bigquery_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
-    {%- set jobs_table = 'JOBS_BY_PROJECT' if use_account_level else 'JOBS_BY_USER' -%}
+    {%- set source_table = custom_source if custom_source else ('`region-' ~ region ~ '`.INFORMATION_SCHEMA.' ~ ('JOBS_BY_PROJECT' if use_account_level else 'JOBS_BY_USER')) -%}
 
     {% if format == 'text' %}
         {% set query %}
@@ -46,7 +50,7 @@
                 total_bytes_billed,
                 cache_hit,
                 total_slot_ms
-            from `region-{{ region }}`.INFORMATION_SCHEMA.{{ jobs_table }}
+            from {{ source_table }}
             where job_id = '{{ query_id }}'
         {% endset %}
 
@@ -84,7 +88,7 @@
                 dml_statistics.deleted_row_count as rows_deleted,
                 query_info.resource_warning as resource_warning
             )) as stats
-            from `region-{{ region }}`.INFORMATION_SCHEMA.{{ jobs_table }}
+            from {{ source_table }}
             where job_id = '{{ query_id }}'
         {% endset %}
 

@@ -1,7 +1,10 @@
 {% macro databricks__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
+    {%- set custom_source = var('databricks_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
     {# For user-scoped, always filter by current user unless explicitly requesting all users #}
-    {%- set effective_user = user_name if user_name is not none else (none if use_account_level else 'current_user()') -%}
+    {# When using a custom source, use_account_level_history is ignored - the view controls access #}
+    {%- set effective_user = user_name if user_name is not none else (none if (use_account_level or custom_source) else 'current_user()') -%}
 
     select
         statement_id as query_id,
@@ -12,7 +15,7 @@
         cast(null as string) as query_tag,
         start_time,
         total_duration_ms as total_elapsed_time
-    from system.query.history
+    from {{ source_table }}
     where start_time > dateadd(day, -7, current_timestamp())
         and execution_status = 'FINISHED'
         and statement_text not like '%{{ dbt_query_profiler._self_identifier() }}%'

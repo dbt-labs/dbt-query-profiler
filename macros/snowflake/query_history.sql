@@ -1,5 +1,6 @@
 {% macro snowflake__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
     {%- set effective_user = user_name if user_name is not none else target.user -%}
+    {%- set custom_source = var('snowflake_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
 
     select
@@ -11,7 +12,11 @@
         query_tag,
         start_time,
         total_elapsed_time
-    {% if use_account_level %}
+    {% if custom_source %}
+    {# Custom source: user-provided view/table (use_account_level_history is ignored) #}
+    from {{ custom_source }}
+    where nvl(query_tag, '') != '{{ dbt_query_profiler._self_identifier() }}'
+    {% elif use_account_level %}
     {# Account-level: snowflake.account_usage - 365 days retention, up to 45 min latency #}
     from snowflake.account_usage.query_history
     where start_time > dateadd(day, -365, current_timestamp())
