@@ -1,4 +1,4 @@
-{% macro _self_identifier() %}dbt_query_profiler{% endmacro %}
+{% macro _self_identifier() %}__dbt_query_profiler_self__{% endmacro %}
 
 {% macro get_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100) %}
     {{ return(adapter.dispatch('get_query_history', 'dbt_query_profiler')(

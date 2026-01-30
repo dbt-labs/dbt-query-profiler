@@ -57,7 +57,7 @@ Each macro must follow the pattern `{adapter}__{macro_name}`:
 
 ## Self-Identifier Pattern (Critical)
 
-The `_self_identifier()` macro returns `'dbt_query_profiler'` and **must be used to exclude the profiler's own queries** from results.
+The `_self_identifier()` macro returns `'__dbt_query_profiler_self__'` and **must be used to exclude the profiler's own queries** from results. The identifier uses double underscores to avoid accidentally matching project names like `dbt_query_profiler_integration_tests`.
 
 ### Implementation Approaches
 
