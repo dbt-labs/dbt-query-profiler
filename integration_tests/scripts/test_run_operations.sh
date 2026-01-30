@@ -7,7 +7,7 @@
 #   ./test_run_operations.sh duckdb /path/to/dbt
 #   DBT_BIN=/path/to/dbt ./test_run_operations.sh bigquery
 #
-# Note: DuckDB tests are limited because logging doesn't persist across sessions.
+# Note: DuckDB uses file-based logging for cross-session persistence.
 
 set -e
 
@@ -59,72 +59,68 @@ skip_test() {
     SKIPPED=$((SKIPPED + 1))
 }
 
-# DuckDB has session-scoped logging - can't test print_* via separate run-operations
+# All adapters use the same test flow
 if [ "$TARGET" == "duckdb" ]; then
-    echo "Note: DuckDB logging is session-scoped. Run-operation tests are limited."
-    echo "      Full integration testing happens via 'dbt build' (same session)."
+    echo "Note: DuckDB uses file-based logging for cross-session persistence."
     echo ""
+fi
 
-    skip_test "print_query_history" "DuckDB requires logging enabled in same session"
-    skip_test "print_query_history (table filter)" "DuckDB session-scoped"
-    skip_test "print_query_sql" "DuckDB session-scoped"
-    skip_test "print_query_plan" "DuckDB session-scoped"
-    skip_test "print_query_stats" "DuckDB session-scoped"
+# Test print_query_history
+run_test "print_query_history" \
+    "$DBT_BIN run-operation print_query_history --args '{limit: 1}' --target $TARGET" \
+    "query_id"
 
+# Test print_query_history with table filter
+run_test "print_query_history (table filter)" \
+    "$DBT_BIN run-operation print_query_history --args '{table_name: test_query_profiler_marker, limit: 1}' --target $TARGET" \
+    "query_id"
+
+# Get a query_id for subsequent tests
+echo ""
+echo "Getting query_id for further tests..."
+QUERY_ID_OUTPUT=$($DBT_BIN run-operation print_query_history --args '{table_name: test_query_profiler_marker, limit: 1}' --target "$TARGET" 2>&1)
+
+# Extract query_id from JSON output (handles both formats)
+QUERY_ID=$(echo "$QUERY_ID_OUTPUT" | grep -o '"query_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"query_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+if [ -z "$QUERY_ID" ]; then
+    # Try numeric format (Redshift, DuckDB)
+    QUERY_ID=$(echo "$QUERY_ID_OUTPUT" | grep -o '"query_id"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*"query_id"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/')
+fi
+
+if [ -z "$QUERY_ID" ]; then
+    echo "WARNING: Could not extract query_id. Skipping query_id-based tests."
+    echo "Output was: $QUERY_ID_OUTPUT"
 else
-    # Test print_query_history
-    run_test "print_query_history" \
-        "$DBT_BIN run-operation print_query_history --args '{limit: 1}' --target $TARGET" \
-        "query_id"
-
-    # Test print_query_history with table filter
-    run_test "print_query_history (table filter)" \
-        "$DBT_BIN run-operation print_query_history --args '{table_name: test_query_profiler_marker, limit: 1}' --target $TARGET" \
-        "query_id"
-
-    # Get a query_id for subsequent tests
+    echo "Using query_id: $QUERY_ID"
     echo ""
-    echo "Getting query_id for further tests..."
-    QUERY_ID_OUTPUT=$($DBT_BIN run-operation print_query_history --args '{table_name: test_query_profiler_marker, limit: 1}' --target "$TARGET" 2>&1)
 
-    # Extract query_id from JSON output (handles both formats)
-    QUERY_ID=$(echo "$QUERY_ID_OUTPUT" | grep -o '"query_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"query_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    # Test print_query_sql
+    run_test "print_query_sql" \
+        "$DBT_BIN run-operation print_query_sql --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
+        "test_query_profiler_marker"
 
-    if [ -z "$QUERY_ID" ]; then
-        # Try numeric format (Redshift)
-        QUERY_ID=$(echo "$QUERY_ID_OUTPUT" | grep -o '"query_id"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*"query_id"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/')
-    fi
-
-    if [ -z "$QUERY_ID" ]; then
-        echo "WARNING: Could not extract query_id. Skipping query_id-based tests."
-        echo "Output was: $QUERY_ID_OUTPUT"
-    else
-        echo "Using query_id: $QUERY_ID"
-        echo ""
-
-        # Test print_query_sql
-        run_test "print_query_sql" \
-            "$DBT_BIN run-operation print_query_sql --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
-            "test_query_profiler_marker"
-
-        # Test print_query_plan (skip for BigQuery)
-        if [ "$TARGET" != "bigquery" ]; then
-            run_test "print_query_plan (text)" \
-                "$DBT_BIN run-operation print_query_plan --args '{query_id: \"$QUERY_ID\", format: text}' --target $TARGET" \
-                "."  # Just check it returns something
-        else
-            skip_test "print_query_plan" "BigQuery doesn't support query plans"
-        fi
-
-        # Test print_query_stats
-        run_test "print_query_stats (json)" \
-            "$DBT_BIN run-operation print_query_stats --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
+    # Test print_query_plan (skip for BigQuery and DuckDB - DuckDB print_query_plan takes sql, not query_id)
+    if [ "$TARGET" != "bigquery" ] && [ "$TARGET" != "duckdb" ]; then
+        run_test "print_query_plan (text)" \
+            "$DBT_BIN run-operation print_query_plan --args '{query_id: \"$QUERY_ID\", format: text}' --target $TARGET" \
             "."  # Just check it returns something
-
-        run_test "print_query_stats (text)" \
-            "$DBT_BIN run-operation print_query_stats --args '{query_id: \"$QUERY_ID\", format: text}' --target $TARGET" \
-            "Query ID"
+    else
+        if [ "$TARGET" == "bigquery" ]; then
+            skip_test "print_query_plan" "BigQuery doesn't support query plans"
+        else
+            skip_test "print_query_plan" "DuckDB print_query_plan takes sql parameter, not query_id"
+        fi
     fi
+
+    # Test print_query_stats
+    run_test "print_query_stats (json)" \
+        "$DBT_BIN run-operation print_query_stats --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
+        "."  # Just check it returns something
+
+    run_test "print_query_stats (text)" \
+        "$DBT_BIN run-operation print_query_stats --args '{query_id: \"$QUERY_ID\", format: text}' --target $TARGET" \
+        "Query ID"
 fi
 
 echo ""

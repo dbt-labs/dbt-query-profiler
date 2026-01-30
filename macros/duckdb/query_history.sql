@@ -1,3 +1,16 @@
+{% macro duckdb__ensure_logging_enabled() %}
+    {#
+        Enable DuckDB logging with file-based storage.
+        File storage is required for logs to persist across sessions.
+        This must be called at the start of print_* macros that read from duckdb_logs.
+    #}
+    {% if execute %}
+        {% set log_path = var('duckdb_log_storage_path', 'target/duckdb_query_logs') %}
+        {% do run_query("CALL enable_logging('QueryLog', storage_path = '" ~ log_path ~ "');") %}
+    {% endif %}
+{% endmacro %}
+
+
 {% macro duckdb__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
     {# DuckDB requires logging to be enabled with: CALL enable_logging('QueryLog'); #}
     select
@@ -21,6 +34,7 @@
 
 
 {% macro duckdb__print_query_history(table_name, user_name, query_type, limit, result_limit) %}
+    {{ duckdb__ensure_logging_enabled() }}
     {% set query %}
         /* {{ dbt_query_profiler._self_identifier() }} */
         select list(

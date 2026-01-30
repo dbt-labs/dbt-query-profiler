@@ -54,13 +54,17 @@
 
 {% macro enable_duckdb_logging() %}
     {#
-        Enable DuckDB query logging if running on DuckDB.
+        Enable DuckDB query logging with file-based storage if running on DuckDB.
         Called via on-run-start hook.
+
+        File-based storage is required for logs to persist across sessions,
+        which is needed for run-operation tests to work.
     #}
     {% if target.type == 'duckdb' %}
         {% if execute %}
-            {% do run_query("CALL enable_logging('QueryLog');") %}
-            {{ log("DuckDB logging enabled", info=True) }}
+            {% set log_path = 'target/duckdb_query_logs' %}
+            {% do run_query("CALL enable_logging('QueryLog', storage_path = '" ~ log_path ~ "');") %}
+            {{ log("DuckDB logging enabled with file storage at: " ~ log_path, info=True) }}
         {% endif %}
     {% endif %}
 {% endmacro %}

@@ -8,6 +8,7 @@
 
 
 {% macro duckdb__print_query_sql(query_id) %}
+    {{ duckdb__ensure_logging_enabled() }}
     {% set query %}
         {{ dbt_query_profiler.get_query_sql(query_id=query_id) }}
     {% endset %}
