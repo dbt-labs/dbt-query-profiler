@@ -12,7 +12,7 @@ A dbt package for querying and analyzing query history and execution plans acros
 | Execution Plan | ✅ | ❌ | ✅*** | ✅ | ✅* |
 | Query Stats | ✅ | ✅ | ✅*** | ✅ | ✅** |
 
-\* DuckDB requires logging enabled with `CALL enable_logging('QueryLog');`
+\* DuckDB requires logging enabled with `CALL enable_logging('QueryLog', storage_path = 'path/to/logs');` for cross-session profiling
 
 \** DuckDB query stats **re-executes the query** via `EXPLAIN ANALYZE`
 
