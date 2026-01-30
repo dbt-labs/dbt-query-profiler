@@ -98,9 +98,6 @@ Get the estimated execution plan for any SQL query using EXPLAIN:
 # From raw SQL
 dbt run-operation print_query_plan --args '{sql: "SELECT * FROM my_table WHERE id = 1"}'
 
-# From a dbt model (gets compiled SQL and runs EXPLAIN)
-dbt run-operation print_query_plan_model --args '{model_name: "my_model"}'
-
 # With format option
 dbt run-operation print_query_plan --args '{sql: "SELECT 1", format: text}'
 ```
@@ -216,12 +213,9 @@ Cache Hit:    True
 |-------|-------------|
 | `get_query_plan(sql)` | Returns EXPLAIN output for the given SQL |
 | `print_query_plan(sql)` | Prints EXPLAIN output |
-| `get_query_plan_model(model_name)` | Gets compiled SQL from dbt model and returns EXPLAIN |
-| `print_query_plan_model(model_name)` | Prints EXPLAIN for a dbt model |
 
 **Arguments:**
 - `sql` (string): The SQL query to explain
-- `model_name` (string): Name of the dbt model (for `*_model` macros)
 - `format` (string): Output format - 'text' (default), 'json'
 
 ### Execution Plan (Actual)
