@@ -15,13 +15,13 @@ dbt-query-profiler retrieves query history, SQL text, execution plans, and stati
 flowchart TB
     A[1. Get query ID] --> B[2. List recent queries<br/>print_query_history]
     B --> C[3. Get full SQL<br/>print_query_sql]
-    C --> D[4. Analyze plan<br/>print_query_plan]
+    C --> D[4. Analyze plan<br/>print_execution_plan]
     D --> E[5. Get metrics<br/>print_query_stats]
 ```
 
 ## Getting Query IDs
 
-Query IDs are required for `print_query_sql`, `print_query_plan`, and `print_query_stats`.
+Query IDs are required for `print_query_sql`, `print_execution_plan`, and `print_query_stats`.
 
 ### Method 1: From print_query_history
 ```bash
@@ -72,20 +72,39 @@ dbt run-operation dbt_query_profiler.print_query_sql \
   --args '{query_id: "01c20db1-060a-bcad-0004-7d832cd6b002"}' --quiet
 ```
 
-### Get Query Plan
+### Get Execution Plan (Actual Stats from Executed Queries)
+
+Use `print_execution_plan` to retrieve the actual execution plan with real statistics from an already-executed query:
+
 ```bash
 # JSON format (default)
-dbt run-operation dbt_query_profiler.print_query_plan \
+dbt run-operation dbt_query_profiler.print_execution_plan \
   --args '{query_id: "01c20db1-..."}' --quiet
 
 # Text format (more readable)
-dbt run-operation dbt_query_profiler.print_query_plan \
+dbt run-operation dbt_query_profiler.print_execution_plan \
   --args '{query_id: "01c20db1-...", format: text}' --quiet
 
 # Markdown (Snowflake only)
-dbt run-operation dbt_query_profiler.print_query_plan \
+dbt run-operation dbt_query_profiler.print_execution_plan \
   --args '{query_id: "01c20db1-...", format: markdown}' --quiet
 ```
+
+### Get Query Plan (EXPLAIN-based for SQL)
+
+Use `print_query_plan` to get an EXPLAIN-based plan for arbitrary SQL (estimated, not actual stats):
+
+```bash
+# From SQL string
+dbt run-operation dbt_query_profiler.print_query_plan \
+  --args '{sql: "SELECT * FROM my_table WHERE id = 1"}' --quiet
+
+# For a dbt model's compiled SQL
+dbt run-operation dbt_query_profiler.print_query_plan_model \
+  --args '{model_name: "my_model"}' --quiet
+```
+
+**Note:** `print_query_plan` uses EXPLAIN and shows estimated costs. `print_execution_plan` retrieves actual execution statistics from a query that has already run.
 
 ### Get Query Stats
 ```bash
@@ -142,7 +161,7 @@ dbt run-operation dbt_query_profiler.print_query_stats \
 ```
 4. **Compare plans** if needed:
 ```bash
-dbt run-operation dbt_query_profiler.print_query_plan \
+dbt run-operation dbt_query_profiler.print_execution_plan \
   --args '{query_id: "first-query-id", format: text}' --quiet
 ```
 

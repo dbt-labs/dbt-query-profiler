@@ -7,7 +7,7 @@ description: Use when adding support for a new data warehouse adapter (e.g., Tri
 
 ## Overview
 
-This package uses `adapter.dispatch()` to route calls to adapter-specific implementations. Adding a new adapter requires creating 4 macro files, implementing self-exclusion via `_self_identifier()`, updating documentation, and adding integration tests.
+This package uses `adapter.dispatch()` to route calls to adapter-specific implementations. Adding a new adapter requires creating 5 macro files, implementing self-exclusion via `_self_identifier()`, updating documentation, and adding integration tests.
 
 ## File Structure
 
@@ -17,7 +17,8 @@ Create these files for adapter `{adapter}`:
 macros/{adapter}/
 ├── query_history.sql   # Required: query history access
 ├── query_sql.sql       # Required: retrieve query text
-├── query_plan.sql      # Required (or raise error if unsupported)
+├── query_plan.sql      # Required: EXPLAIN-based plans (or raise error)
+├── execution_plan.sql  # Required: actual execution stats (or raise error)
 └── query_stats.sql     # Required: execution statistics
 ```
 
@@ -42,9 +43,13 @@ Each macro must follow the pattern `{adapter}__{macro_name}`:
 - `{adapter}__print_query_sql(query_id)`
 
 ### query_plan.sql
-- `{adapter}__get_query_plan(query_id, format)`
-- `{adapter}__print_query_plan(query_id, format)`
-- `{adapter}__get_query_plan_summary(query_id)` (optional)
+- `{adapter}__get_query_plan(sql)`
+- `{adapter}__print_query_plan(sql, format)`
+
+### execution_plan.sql
+- `{adapter}__get_execution_plan(query_id)`
+- `{adapter}__print_execution_plan(query_id, format)`
+- `{adapter}__get_execution_plan_summary(query_id)` (optional)
 
 ### query_stats.sql
 - `{adapter}__get_query_stats(query_id, format, result_limit)`
@@ -216,7 +221,8 @@ on-run-start:
 
 - [ ] Create `macros/{adapter}/query_history.sql` with get_ and print_ macros
 - [ ] Create `macros/{adapter}/query_sql.sql` with get_ and print_ macros
-- [ ] Create `macros/{adapter}/query_plan.sql` (implement or raise error)
+- [ ] Create `macros/{adapter}/query_plan.sql` with get_ and print_ macros (EXPLAIN-based, or raise error)
+- [ ] Create `macros/{adapter}/execution_plan.sql` with get_, print_, and summary macros (or raise error)
 - [ ] Create `macros/{adapter}/query_stats.sql` with get_ and print_ macros
 - [ ] Implement `_self_identifier()` exclusion in all get_ macros
 - [ ] Add self-identifier tagging/commenting in all print_ macros
