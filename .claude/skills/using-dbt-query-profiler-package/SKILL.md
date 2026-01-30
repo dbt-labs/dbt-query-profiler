@@ -98,13 +98,33 @@ Use `print_query_plan` to get an EXPLAIN-based plan for arbitrary SQL (estimated
 # From SQL string
 dbt run-operation dbt_query_profiler.print_query_plan \
   --args '{sql: "SELECT * FROM my_table WHERE id = 1"}' --quiet
-
-# For a dbt model's compiled SQL
-dbt run-operation dbt_query_profiler.print_query_plan_model \
-  --args '{model_name: "my_model"}' --quiet
 ```
 
 **Note:** `print_query_plan` uses EXPLAIN and shows estimated costs. `print_execution_plan` retrieves actual execution statistics from a query that has already run.
+
+### Getting Query Plans for dbt Models
+
+dbt models contain Jinja that must be compiled to SQL before you can run EXPLAIN. Here's how to get the query plan for a model:
+
+**Step 1: Compile the model**
+```bash
+dbt compile --select my_model
+```
+
+**Step 2: Find the compiled SQL**
+The compiled SQL is written to:
+```
+target/compiled/<project_name>/models/<path>/<model_name>.sql
+```
+
+**Step 3: Run EXPLAIN on the compiled SQL**
+```bash
+# Copy the compiled SQL and pass it to print_query_plan
+dbt run-operation dbt_query_profiler.print_query_plan \
+  --args '{sql: "SELECT ... (paste compiled SQL)"}' --quiet
+```
+
+**Note:** dbt models contain Jinja that must be compiled before running EXPLAIN. There's no way to programmatically get the compiled SQL via macros because dbt's `graph.nodes` only exposes `raw_code` (uncompiled Jinja), not `compiled_code`. The manual compile workflow above is the recommended approach.
 
 ### Get Query Stats
 ```bash
