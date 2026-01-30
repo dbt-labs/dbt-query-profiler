@@ -72,7 +72,43 @@ macros:
 
   - name: get_query_plan
     description: |
-      Returns SQL to retrieve the query execution plan/operator statistics.
+      Returns SQL for an EXPLAIN-based query plan (estimated costs, not actual execution stats).
+
+      **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
+
+      BigQuery does not support EXPLAIN via SQL.
+
+      For dbt models, first compile with `dbt compile --select model_name` then pass the compiled SQL.
+    arguments:
+      - name: sql
+        type: string
+        description: The SQL to explain (must be compiled SQL, not Jinja)
+
+  - name: print_query_plan
+    description: |
+      Runs EXPLAIN on the provided SQL and prints the estimated query plan.
+
+      **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
+
+      **Usage:** `dbt run-operation print_query_plan --args '{sql: "SELECT * FROM my_table"}'`
+
+      For dbt models, first compile with `dbt compile --select model_name` then pass the compiled SQL.
+    arguments:
+      - name: sql
+        type: string
+        description: The SQL to explain (must be compiled SQL, not Jinja)
+      - name: format
+        type: string
+        description: |
+          Output format:
+          - 'text' (default): Compact terminal-friendly output
+          - 'json': Full details as JSON
+          - 'graphviz': DOT format for Graphviz (DuckDB only)
+          - 'html': HTML output (DuckDB only)
+
+  - name: get_execution_plan
+    description: |
+      Returns SQL to retrieve the actual execution plan with operator statistics from a previously executed query.
 
       **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
 
@@ -80,19 +116,19 @@ macros:
     arguments:
       - name: query_id
         type: string
-        description: The query ID
+        description: The query ID of a previously executed query
 
-  - name: print_query_plan
+  - name: print_execution_plan
     description: |
-      Prints the query execution plan for a given query ID.
+      Retrieves and prints the actual execution plan with operator statistics from a previously executed query.
 
       **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
 
-      **Usage:** `dbt run-operation print_query_plan --args '{query_id: "...", format: "text"}'`
+      **Usage:** `dbt run-operation print_execution_plan --args '{query_id: "...", format: "text"}'`
     arguments:
       - name: query_id
         type: string
-        description: The query ID
+        description: The query ID of a previously executed query
       - name: format
         type: string
         description: |
@@ -100,18 +136,16 @@ macros:
           - 'json' (default): Full details as JSON
           - 'text': Compact terminal-friendly output
           - 'markdown': Table format (Snowflake only)
-          - 'graphviz': DOT format for Graphviz (DuckDB only)
-          - 'html': HTML output (DuckDB only)
 
-  - name: get_query_plan_summary
+  - name: get_execution_plan_summary
     description: |
-      Returns SQL for a summarized view of the query plan with key metrics extracted.
+      Returns SQL for a summarized view of the execution plan with key metrics extracted.
 
       **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
     arguments:
       - name: query_id
         type: string
-        description: The query ID
+        description: The query ID of a previously executed query
 
   - name: get_query_stats
     description: |
