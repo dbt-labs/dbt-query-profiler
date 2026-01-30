@@ -1,14 +1,14 @@
 {{
     config(
         materialized='view',
-        tags=['setup'],
-        pre_hook=["{% if target.type == 'duckdb' %}CALL enable_logging('QueryLog');{% endif %}"]
+        tags=['setup']
     )
 }}
 
 {#
-    This model enables DuckDB logging before any test queries run.
-    For other adapters, it's just a placeholder.
+    Placeholder model for DuckDB logging setup.
+    Actual logging is enabled via on-run-start hook with file-based storage.
+    For other adapters, this is just a placeholder.
 #}
 
 select 1 as logging_enabled

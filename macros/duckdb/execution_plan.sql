@@ -19,6 +19,7 @@
 
 
 {% macro duckdb__print_execution_plan(query_id, format) %}
+    {{ duckdb__ensure_logging_enabled() }}
     {# First, get the query text from logs #}
     {% set sql_query %}
         select message

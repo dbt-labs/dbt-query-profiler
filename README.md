@@ -308,6 +308,12 @@ CALL enable_logging('QueryLog');
 
 Once enabled, queries are logged to the `duckdb_logs` view.
 
+**Cross-session profiling:** By default, DuckDB logs are stored in memory and lost when the session ends. To profile queries across sessions (e.g., via separate `dbt run-operation` commands), use file-based logging:
+```sql
+CALL enable_logging('QueryLog', storage_path = 'path/to/logs');
+```
+When you enable logging with the same `storage_path` in a new session, logs from previous sessions become available.
+
 **Note:** `get_query_stats()` for DuckDB will **re-execute the query** using `EXPLAIN ANALYZE` to capture actual execution metrics.
 
 ## Platform-Specific Notes
@@ -349,6 +355,8 @@ Once enabled, queries are logged to the `duckdb_logs` view.
 
 - Requires logging to be enabled with `CALL enable_logging('QueryLog');`
 - Query history is read from `duckdb_logs` view
+- **In-memory logging (default):** Logs are lost when session ends
+- **File-based logging:** Use `CALL enable_logging('QueryLog', storage_path = 'path/to/logs');` to persist logs across sessions
 - Query plan uses `EXPLAIN` (does not re-execute)
 - Supports formats: `text`, `json`, `graphviz`, `html`
 - **Query stats will re-execute the query** via `EXPLAIN ANALYZE` to get actual metrics

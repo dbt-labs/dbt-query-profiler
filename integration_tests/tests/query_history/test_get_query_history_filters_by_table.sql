@@ -6,12 +6,7 @@
 
     Test passes if at least one row is returned containing the marker.
     Test fails if zero rows are returned.
-
-    Note: Skipped for DuckDB due to session-scoped logging limitations.
-    TODO: Investigate DuckDB logging behavior.
 #}
-
-{{ config(enabled=(target.type != 'duckdb')) }}
 
 -- depends_on: {{ ref('setup_test_queries') }}
 
