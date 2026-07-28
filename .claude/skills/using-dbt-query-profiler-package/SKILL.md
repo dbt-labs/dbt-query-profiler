@@ -193,7 +193,7 @@ dbt run-operation dbt_query_profiler.print_execution_plan \
 | `user_name` | Filter by user (empty string = all users) | Current user |
 | `query_type` | Filter: SELECT, INSERT, CREATE_TABLE_AS_SELECT, etc. | None |
 | `limit` | Number of queries to return | 1 |
-| `result_limit` | Lookback depth | 100 |
+| `result_limit` | Lookback depth for `print_query_history` (all adapters) and `print_query_sql` (Snowflake only) | 100 (history), 1000 (sql) |
 | `query_id` | Specific query to analyze | Required for sql/plan/stats |
 | `format` | Output: json, text, markdown (varies by adapter) | json |
 
@@ -212,7 +212,8 @@ dbt run-operation dbt_query_profiler.print_execution_plan \
   ```
 
 ### BigQuery
-- Query plans not available (raises error)
+- Query plan (EXPLAIN) not available via SQL (raises error)
+- **Execution Plan:** Returns Query Insights instead of an operator-level plan — diagnostics like slot contention, high cardinality joins, partition skew. Returns a "no issues detected" message if `performance_insights` is null.
 - Uses `INFORMATION_SCHEMA.JOBS_BY_USER` or `JOBS_BY_PROJECT`
 
 ### Databricks
@@ -221,7 +222,7 @@ dbt run-operation dbt_query_profiler.print_execution_plan \
 
 ### DuckDB
 - Requires `CALL enable_logging('QueryLog')` before queries to profile
-- Logs are session-scoped (won't see queries from previous sessions)
+- Use file-based logging for cross-session profiling: `CALL enable_logging('QueryLog', storage_path = 'path/to/logs')`
 - Plans via `EXPLAIN ANALYZE` re-execution
 
 ### Redshift

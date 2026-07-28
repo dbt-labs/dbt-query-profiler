@@ -13,6 +13,15 @@
     {% if execute and sql_result and sql_result.rows and sql_result.rows[0][0] %}
         {%- set original_sql = sql_result.rows[0][0] -%}
         explain extended {{ original_sql }}
+    {% elif not execute %}
+        {#
+            Parse time: run_query is a no-op and returns none, so there is no statement
+            text to build an EXPLAIN from yet. Emit shape-compatible placeholder SQL
+            (Databricks EXPLAIN returns a single `plan` column) instead of raising —
+            raising here aborts `dbt parse` for the entire project, not just the model
+            using this macro. The real EXPLAIN is built on the execute pass.
+        #}
+        select cast(null as string) as plan limit 0
     {% else %}
         {{ exceptions.raise_compiler_error("Query not found with statement_id: " ~ query_id) }}
     {% endif %}
@@ -69,6 +78,9 @@
     {% if execute and sql_result and sql_result.rows and sql_result.rows[0][0] %}
         {%- set original_sql = sql_result.rows[0][0] -%}
         explain cost {{ original_sql }}
+    {% elif not execute %}
+        {# Parse time placeholder - see databricks__get_execution_plan rationale above. #}
+        select cast(null as string) as plan limit 0
     {% else %}
         {{ exceptions.raise_compiler_error("Query not found with statement_id: " ~ query_id) }}
     {% endif %}

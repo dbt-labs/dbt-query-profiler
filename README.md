@@ -9,7 +9,7 @@ A dbt package for querying and analyzing query history and execution plans acros
 | Query History | ✅ | ✅ | ✅*** | ✅ | ✅* |
 | Query SQL | ✅ | ✅ | ✅*** | ✅ | ✅* |
 | Query Plan (EXPLAIN) | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Execution Plan | ✅ | ❌ | ✅*** | ✅ | ✅* |
+| Execution Plan | ✅ | ✅† | ✅*** | ✅ | ✅* |
 | Query Stats | ✅ | ✅ | ✅*** | ✅ | ✅** |
 
 \* DuckDB requires logging enabled with `CALL enable_logging('QueryLog', storage_path = 'path/to/logs');` for cross-session profiling
@@ -17,6 +17,8 @@ A dbt package for querying and analyzing query history and execution plans acros
 \** DuckDB query stats **re-executes the query** via `EXPLAIN ANALYZE`
 
 \*** Databricks requires access to `system.query.history` (Query Plan works without it)
+
+† BigQuery does not expose operator-level execution plans. `print_execution_plan` returns **Query Insights** (`performance_insights` from `INFORMATION_SCHEMA`) — performance diagnostics such as slot contention, high cardinality joins, and partition skew. See [BigQuery Query Insights](https://cloud.google.com/bigquery/docs/query-insights).
 
 ## Installation
 
@@ -33,6 +35,16 @@ Then run:
 dbt deps
 ```
 
+## AI Agent Integration
+
+After installing the package, you can install the companion skill for your AI assistant. Run this from your **main project directory** (where `dbt_packages/` lives):
+
+```bash
+npx skills add ./dbt_packages/dbt_query_profiler/.claude/skills/using-dbt-query-profiler-package
+```
+
+This installs the `using-dbt-query-profiler-package` skill, which teaches your AI agent how to use the profiler — getting query IDs, retrieving execution plans, comparing model performance, and interpreting results.
+
 ## Configuration
 
 By default, macros use **user-scoped** views that require no special permissions and only show queries from the current user. To access queries from all users (requires elevated permissions), set:
@@ -45,10 +57,17 @@ vars:
 
 | Setting | User-Scoped (default) | Account-Level |
 |---------|----------------------|---------------|
-| **Snowflake** | `information_schema.query_history()` | `snowflake.account_usage.query_history` |
+| **Snowflake** | `information_schema.query_history_by_user()` (falls back to `query_history()` if no user is resolved) | `snowflake.account_usage.query_history` |
 | **BigQuery** | `INFORMATION_SCHEMA.JOBS_BY_USER` | `INFORMATION_SCHEMA.JOBS_BY_PROJECT` |
 | **Databricks** | `system.query.history` filtered by `current_user()` | `system.query.history` (all users) |
-| **Redshift** | `sys_query_history` filtered by user | `sys_query_history` (all users) |
+| **Redshift** | `sys_query_history` filtered by user | `sys_query_history` (all users) — see note |
+
+**Redshift note:** Redshift has no separate account-level source. `sys_query_history` is a single
+view whose visibility depends on the connected user's privileges: superusers see all rows, and
+regular users see only their own unless granted `SYSLOG ACCESS UNRESTRICTED`
+([docs](https://docs.aws.amazon.com/redshift/latest/dg/SYS_QUERY_HISTORY.html)). Setting
+`use_account_level_history: true` stops the package filtering by username, but it cannot grant
+access — without the privilege you will still only see your own queries.
 
 ### Custom Query History Source
 
@@ -325,8 +344,8 @@ When you enable logging with the same `storage_path` in a new session, logs from
 
 - **User-scoped (default):** Uses `INFORMATION_SCHEMA.JOBS_BY_USER` - only current user's jobs
 - **Project-level:** Uses `INFORMATION_SCHEMA.JOBS_BY_PROJECT` - all jobs in project
-- Query plan is not available via SQL (use BigQuery console or API)
-- Use `get_query_stats()` for high-level execution metrics as an alternative to query plans
+- Query plan (EXPLAIN) is not available via SQL (use BigQuery console or API)
+- **Execution Plan:** Returns [Query Insights](https://cloud.google.com/bigquery/docs/query-insights) instead of an operator-level plan — diagnostics include slot contention, high cardinality joins, partition skew, and shuffle quota issues. Returns `null` insights if no performance issues were detected.
 - Region is read from `target.location` in your profile (defaults to 'us' if not set)
 
 ### Databricks
