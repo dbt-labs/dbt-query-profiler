@@ -58,7 +58,7 @@
         {# JSON format #}
         {% set query %}
             select json_serialize(
-                json_build_object(
+                object(
                     'query_id', query_id,
                     'query_type', query_type,
                     'user_name', username,

@@ -18,17 +18,17 @@
     from {{ source_table }}
     where start_time > dateadd(day, -7, current_timestamp())
         and execution_status = 'FINISHED'
-        and statement_text not like '%{{ dbt_query_profiler._self_identifier() }}%'
+        and position('{{ dbt_query_profiler._self_identifier() }}' in statement_text) = 0
     {% if effective_user == 'current_user()' %}
         and executed_by = current_user()
     {% elif effective_user %}
-        and lower(executed_by) = lower('{{ effective_user }}')
+        and lower(executed_by) = lower('{{ dbt_query_profiler._escape_literal(effective_user) }}')
     {% endif %}
     {% if table_name %}
-        and lower(statement_text) like '%{{ table_name | lower }}%'
+        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(statement_text)) > 0
     {% endif %}
     {% if query_type %}
-        and statement_type = '{{ query_type | upper }}'
+        and statement_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'
     {% endif %}
     order by start_time desc
     limit {{ limit }}

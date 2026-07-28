@@ -41,12 +41,9 @@
 
 
 {% macro duckdb__get_query_stats(query_id, result_limit) %}
-    {# First, get the query text from logs #}
+    {# First, get the query text from logs (see duckdb__query_log_lookup). #}
     {% set sql_query %}
-        select message
-        from duckdb_logs
-        where type = 'QueryLog'
-            and query_id = {{ query_id }}
+        {{ dbt_query_profiler.duckdb__query_log_lookup(query_id) }}
     {% endset %}
 
     {% set sql_result = run_query(sql_query) %}
@@ -56,8 +53,17 @@
         {%- set select_sql = duckdb__extract_select_from_ddl(original_sql) -%}
         {# EXPLAIN ANALYZE with JSON format to get structured stats #}
         explain (analyze, format json) {{ select_sql }}
+    {% elif not execute %}
+        {#
+            Parse time: run_query is a no-op and returns none, so there is no query
+            text to analyze yet. Emit shape-compatible placeholder SQL (DuckDB EXPLAIN
+            returns explain_key, explain_value) instead of raising — raising here aborts
+            `dbt parse` for the entire project. The real EXPLAIN ANALYZE runs on the
+            execute pass.
+        #}
+        select cast(null as varchar) as explain_key, cast(null as varchar) as explain_value limit 0
     {% else %}
-        {{ exceptions.raise_compiler_error("Query not found with rowid: " ~ query_id ~ ". Ensure logging is enabled with: CALL enable_logging('QueryLog');") }}
+        {{ exceptions.raise_compiler_error("Query not found with query_id: " ~ query_id ~ ". Ensure logging is enabled with: CALL enable_logging('QueryLog');") }}
     {% endif %}
 {% endmacro %}
 
@@ -66,10 +72,7 @@
     {{ duckdb__ensure_logging_enabled() }}
     {# First, get the query text from logs #}
     {% set sql_query %}
-        select message
-        from duckdb_logs
-        where type = 'QueryLog'
-            and query_id = {{ query_id }}
+        {{ dbt_query_profiler.duckdb__query_log_lookup(query_id) }}
     {% endset %}
 
     {% set sql_result = run_query(sql_query) %}
@@ -123,6 +126,6 @@
             {% endif %}
         {% endif %}
     {% else %}
-        {{ print("Query not found with rowid: " ~ query_id ~ ". Ensure logging is enabled with: CALL enable_logging('QueryLog');") }}
+        {{ print("Query not found with query_id: " ~ query_id ~ ". Ensure logging is enabled with: CALL enable_logging('QueryLog');") }}
     {% endif %}
 {% endmacro %}

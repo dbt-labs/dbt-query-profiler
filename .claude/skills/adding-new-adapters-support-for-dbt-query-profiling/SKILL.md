@@ -39,8 +39,8 @@ Each macro must follow the pattern `{adapter}__{macro_name}`:
 - `{adapter}__print_query_history(table_name, user_name, query_type, limit, result_limit)`
 
 ### query_sql.sql
-- `{adapter}__get_query_sql(query_id)`
-- `{adapter}__print_query_sql(query_id)`
+- `{adapter}__get_query_sql(query_id, result_limit=1000)`
+- `{adapter}__print_query_sql(query_id, result_limit=1000)`
 
 ### query_plan.sql
 - `{adapter}__get_query_plan(sql)`
@@ -49,7 +49,7 @@ Each macro must follow the pattern `{adapter}__{macro_name}`:
 ### execution_plan.sql
 - `{adapter}__get_execution_plan(query_id)`
 - `{adapter}__print_execution_plan(query_id, format)`
-- `{adapter}__get_execution_plan_summary(query_id)` (optional)
+- `{adapter}__get_execution_plan_summary(query_id)` (optional — if the adapter has no separate summary concept, delegate to `get_execution_plan`)
 
 ### query_stats.sql
 - `{adapter}__get_query_stats(query_id, format, result_limit)`

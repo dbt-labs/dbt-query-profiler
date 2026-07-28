@@ -13,6 +13,8 @@ set -e
 
 TARGET="${1:-duckdb}"
 DBT_BIN="${2:-${DBT_BIN:-dbt}}"
+# Adapter type may differ from target name (e.g. target "bq" = adapter "bigquery")
+ADAPTER="${3:-$TARGET}"
 FAILED=0
 TESTS_RUN=0
 SKIPPED=0
@@ -60,7 +62,7 @@ skip_test() {
 }
 
 # All adapters use the same test flow
-if [ "$TARGET" == "duckdb" ]; then
+if [ "$ADAPTER" == "duckdb" ]; then
     echo "Note: DuckDB uses file-based logging for cross-session persistence."
     echo ""
 fi
@@ -100,18 +102,19 @@ else
         "$DBT_BIN run-operation print_query_sql --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
         "test_query_profiler_marker"
 
-    # Test print_query_plan (skip for BigQuery and DuckDB - DuckDB print_query_plan takes sql, not query_id)
-    if [ "$TARGET" != "bigquery" ] && [ "$TARGET" != "duckdb" ]; then
+    # Test print_query_plan (skip for BigQuery - takes sql parameter, not query_id)
+    if [ "$ADAPTER" != "bigquery" ]; then
         run_test "print_query_plan (text)" \
-            "$DBT_BIN run-operation print_query_plan --args '{query_id: \"$QUERY_ID\", format: text}' --target $TARGET" \
+            "$DBT_BIN run-operation print_query_plan --args '{sql: \"SELECT 1\", format: text}' --target $TARGET" \
             "."  # Just check it returns something
     else
-        if [ "$TARGET" == "bigquery" ]; then
-            skip_test "print_query_plan" "BigQuery doesn't support query plans"
-        else
-            skip_test "print_query_plan" "DuckDB print_query_plan takes sql parameter, not query_id"
-        fi
+        skip_test "print_query_plan" "BigQuery doesn't support query plans"
     fi
+
+    # Test print_execution_plan
+    run_test "print_execution_plan" \
+        "$DBT_BIN run-operation print_execution_plan --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
+        "."  # Just check it returns something
 
     # Test print_query_stats
     run_test "print_query_stats (json)" \

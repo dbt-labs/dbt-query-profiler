@@ -11,10 +11,48 @@
 {% endmacro %}
 
 
+{% macro duckdb__query_log_lookup(query_id) %}
+    {#
+        Resolve a query_id handed out by duckdb__get_query_history back to its SQL text.
+
+        query_id is a composite "<context_id>:<epoch_us>". Neither column alone
+        identifies a query: context_id is per-execution-context and
+        duckdb_logs.query_id is a per-connection counter, so both recycle once
+        file-based logs accumulate across sessions and one value then covers many
+        unrelated statements. Only the pair (context_id, epoch_us(timestamp)) is
+        unique - do not simplify this back to a single column.
+
+        DuckDB writes one identical log row per connection, so `limit 1` here picks
+        among true duplicates of the same statement.
+    #}
+    {%- set parts = (query_id | string).split(':') -%}
+    {%- if parts | length != 2 or not parts[0].isdigit() or not parts[1].isdigit() -%}
+        {{ exceptions.raise_compiler_error(
+            "Invalid DuckDB query_id: '" ~ query_id ~ "'. Expected '<context_id>:<epoch_us>' "
+            ~ "as returned by get_query_history, e.g. '82:1785233290416576'."
+        ) }}
+    {%- endif %}
+    /* {{ dbt_query_profiler._self_identifier() }} */
+    select message
+    from duckdb_logs
+    where type = 'QueryLog'
+        and context_id = {{ parts[0] }}
+        and epoch_us(timestamp) = {{ parts[1] }}
+    limit 1
+{% endmacro %}
+
+
 {% macro duckdb__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
     {# DuckDB requires logging to be enabled with: CALL enable_logging('QueryLog'); #}
-    select
-        query_id,
+    {#
+        DISTINCT is required: DuckDB logs each statement once per connection, so
+        without it `limit N` returns N copies of the same query.
+
+        query_id is a composite of context_id and the microsecond timestamp —
+        see duckdb__query_log_lookup for why neither column works alone.
+    #}
+    select distinct
+        context_id::varchar || ':' || epoch_us(timestamp)::varchar as query_id,
         message as query_text,
         cast(null as varchar) as user_name,
         cast(null as varchar) as warehouse_name,
@@ -24,11 +62,11 @@
         cast(null as bigint) as total_elapsed_time
     from duckdb_logs
     where type = 'QueryLog'
-        and message not like '%{{ dbt_query_profiler._self_identifier() }}%'
+        and position('{{ dbt_query_profiler._self_identifier() }}' in message) = 0
     {% if table_name %}
-        and lower(message) like '%{{ table_name | lower }}%'
+        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(message)) > 0
     {% endif %}
-    order by timestamp desc
+    order by start_time desc
     limit {{ limit }}
 {% endmacro %}
 

@@ -1,22 +1,13 @@
-{% macro snowflake__get_query_sql(query_id) %}
-    {%- set custom_source = var('snowflake_query_history_source', none) -%}
-    {%- set use_account_level = var('use_account_level_history', false) -%}
-
+{% macro snowflake__get_query_sql(query_id, result_limit=1000) %}
     select query_text
-    {% if custom_source %}
-    from {{ custom_source }}
-    {% elif use_account_level %}
-    from snowflake.account_usage.query_history
-    {% else %}
-    from table(information_schema.query_history())
-    {% endif %}
+    {{ dbt_query_profiler.snowflake__query_lookup_source(result_limit) }}
     where query_id = '{{ query_id }}'
 {% endmacro %}
 
 
-{% macro snowflake__print_query_sql(query_id) %}
+{% macro snowflake__print_query_sql(query_id, result_limit=1000) %}
     {% set query %}
-        {{ dbt_query_profiler.get_query_sql(query_id=query_id) }}
+        {{ dbt_query_profiler.get_query_sql(query_id=query_id, result_limit=result_limit) }}
     {% endset %}
 
     {% set results = run_query(query) %}

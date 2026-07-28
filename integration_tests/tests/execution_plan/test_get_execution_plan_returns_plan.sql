@@ -1,13 +1,12 @@
 {#
     Test: get_execution_plan returns execution plan data from query history.
 
-    Note: BigQuery does not support get_execution_plan, so this test is skipped.
+    For BigQuery: verifies that INFORMATION_SCHEMA.JOBS_BY_USER is accessible
+    (performance_insights may be null for clean queries, which is valid).
 
     For execution_plan, we need a query_id first. We get one from query_history
     and then verify the execution plan source exists and is accessible.
 #}
-
-{{ config(enabled=(target.type != 'bigquery')) }}
 
 -- depends_on: {{ ref('setup_test_queries') }}
 
@@ -24,7 +23,12 @@ with history as (
     but we can verify the plan data is accessible.
 #}
 
-{% if target.type == 'duckdb' %}
+{% if target.type == 'bigquery' %}
+{# BigQuery uses query_info.performance_insights - verify INFORMATION_SCHEMA is accessible #}
+plan_check as (
+    select count(*) as cnt from history
+)
+{% elif target.type == 'duckdb' %}
 {# DuckDB get_execution_plan retrieves query from logs and runs EXPLAIN #}
 plan_check as (
     select count(*) as cnt

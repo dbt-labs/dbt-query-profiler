@@ -58,7 +58,10 @@ macros:
     arguments:
       - name: query_id
         type: string
-        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB rowid)
+        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB '<context_id>:<epoch_us>' as returned by get_query_history)
+      - name: result_limit
+        type: integer
+        description: "Number of queries to look back through. Accepted by all adapters, but only affects Snowflake — the others look the query up by ID directly. Default: 1000, max: 10000."
 
   - name: print_query_sql
     description: |
@@ -68,7 +71,10 @@ macros:
     arguments:
       - name: query_id
         type: string
-        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB rowid)
+        description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB '<context_id>:<epoch_us>' as returned by get_query_history)
+      - name: result_limit
+        type: integer
+        description: "Number of queries to look back through. Accepted by all adapters, but only affects Snowflake — the others look the query up by ID directly. Default: 1000, max: 10000."
 
   - name: get_query_plan
     description: |
@@ -79,6 +85,10 @@ macros:
       BigQuery does not support EXPLAIN via SQL.
 
       For dbt models, first compile with `dbt compile --select model_name` then pass the compiled SQL.
+
+      **Not usable inside a model.** The returned `EXPLAIN` statement is not
+      composable in SQL — it cannot be wrapped in a subquery, a CTE, or a view body.
+      Pass it to `run_query()` from a macro or run-operation instead.
     arguments:
       - name: sql
         type: string
@@ -113,6 +123,19 @@ macros:
       **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
 
       BigQuery does not expose operator-level execution statistics via SQL.
+
+      **Not usable inside a model.** On Databricks and DuckDB this returns an
+      `EXPLAIN` statement, and `EXPLAIN` is not composable in SQL — it cannot be
+      wrapped in a subquery, a CTE, or a view body. Pass the result to `run_query()`
+      from a macro or run-operation instead. (Snowflake and Redshift return a plain
+      SELECT over a system view, so those two are composable.)
+
+      **Redshift** reaches `stl_explain` by correlating `sys_query_history.transaction_id`
+      with `stl_query.xid` plus time bounds, because the two use different query ID
+      spaces. A transaction can hold more than one explained statement, so the result
+      includes a `statement_id` column and is ordered by it — check it before reading
+      the plan as a single tree. STL tables are pruned aggressively, so plans are
+      usually unavailable for older queries.
     arguments:
       - name: query_id
         type: string
@@ -163,6 +186,11 @@ macros:
       **Redshift metrics:** returned_bytes, returned_rows, compile_time, execution_time, queue_time, planning_time, result_cache_hit
 
       **DuckDB metrics:** Uses EXPLAIN ANALYZE (re-executes query) - timing, rows, operator-level stats
+
+      **DuckDB is not usable inside a model** for this macro: it returns an
+      `EXPLAIN ANALYZE` statement, which is not composable in SQL (no subquery, CTE
+      or view body). Pass it to `run_query()` instead. The other four adapters return
+      a plain SELECT over a system view and are composable.
     arguments:
       - name: query_id
         type: string

@@ -1,4 +1,6 @@
-{% macro bigquery__get_query_sql(query_id) %}
+{# result_limit is accepted for signature parity across adapters; BigQuery filters
+   by job_id directly, so it has no effect here. #}
+{% macro bigquery__get_query_sql(query_id, result_limit=1000) %}
     {%- set region = target.location if target.location else 'us' -%}
     {%- set custom_source = var('bigquery_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
@@ -15,9 +17,9 @@
 {% endmacro %}
 
 
-{% macro bigquery__print_query_sql(query_id) %}
+{% macro bigquery__print_query_sql(query_id, result_limit=1000) %}
     {% set query %}
-        {{ dbt_query_profiler.get_query_sql(query_id=query_id) }}
+        {{ dbt_query_profiler.get_query_sql(query_id=query_id, result_limit=result_limit) }}
     {% endset %}
 
     {% set results = run_query(query) %}

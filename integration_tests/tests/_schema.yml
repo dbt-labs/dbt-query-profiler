@@ -16,6 +16,10 @@ tests:
   - name: test_get_query_plan_returns_plan
     description: Verifies get_query_plan returns execution plan (disabled for BigQuery)
 
+  # Execution Plan tests
+  - name: test_get_execution_plan_returns_plan
+    description: Verifies execution plan data source is accessible (BigQuery returns Query Insights; other adapters return operator-level plans)
+
   # Query Stats tests
   - name: test_get_query_stats_returns_metrics
     description: Verifies get_query_stats returns execution statistics
