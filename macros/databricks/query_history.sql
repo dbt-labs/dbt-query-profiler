@@ -1,4 +1,4 @@
-{% macro databricks__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro databricks__get_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {%- set custom_source = var('databricks_query_history_source', none) -%}
     {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
@@ -27,6 +27,9 @@
     {% if table_name %}
         and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(statement_text)) > 0
     {% endif %}
+    {% if node_id %}
+        and position('{{ dbt_query_profiler._escape_literal(node_id) }}' in statement_text) > 0
+    {% endif %}
     {% if query_type %}
         and statement_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'
     {% endif %}
@@ -35,7 +38,7 @@
 {% endmacro %}
 
 
-{% macro databricks__print_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro databricks__print_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {% set query %}
         /* {{ dbt_query_profiler._self_identifier() }} */
         select to_json(collect_list(struct(
@@ -48,7 +51,7 @@
             total_elapsed_time,
             query_text
         ))) as result
-        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit) }})
+        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit, node_id=node_id) }})
     {% endset %}
 
     {% set results = run_query(query) %}

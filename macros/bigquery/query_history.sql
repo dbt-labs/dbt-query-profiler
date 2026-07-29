@@ -1,4 +1,4 @@
-{% macro bigquery__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro bigquery__get_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {%- set effective_user = user_name if user_name is not none else target.user -%}
     {%- set region = target.location if target.location else 'us' -%}
     {%- set custom_source = var('bigquery_query_history_source', none) -%}
@@ -33,6 +33,9 @@
     {% if table_name %}
         and strpos(lower(query), lower('{{ dbt_query_profiler._escape_literal(table_name) }}')) > 0
     {% endif %}
+    {% if node_id %}
+        and strpos(query, '{{ dbt_query_profiler._escape_literal(node_id) }}') > 0
+    {% endif %}
     {% if query_type %}
         and statement_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'
     {% endif %}
@@ -41,7 +44,7 @@
 {% endmacro %}
 
 
-{% macro bigquery__print_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro bigquery__print_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {% set query %}
         /* {{ dbt_query_profiler._self_identifier() }} */
         select to_json_string(array_agg(struct(
@@ -54,7 +57,7 @@
             total_elapsed_time,
             query_text
         ) order by start_time desc)) as result
-        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit) }})
+        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit, node_id=node_id) }})
     {% endset %}
 
     {% set results = run_query(query) %}

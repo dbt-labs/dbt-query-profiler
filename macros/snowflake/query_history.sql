@@ -32,7 +32,7 @@
 {% endmacro %}
 
 
-{% macro snowflake__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro snowflake__get_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {%- set effective_user = user_name if user_name is not none else target.user -%}
     {%- set custom_source = var('snowflake_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
@@ -75,6 +75,9 @@
     {% if table_name %}
         and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(query_text)) > 0
     {% endif %}
+    {% if node_id %}
+        and position('{{ dbt_query_profiler._escape_literal(node_id) }}' in query_text) > 0
+    {% endif %}
     {% if query_type %}
         and query_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'
     {% endif %}
@@ -83,7 +86,7 @@
 {% endmacro %}
 
 
-{% macro snowflake__print_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro snowflake__print_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {# Set query tag to exclude this query from results #}
     {% do run_query("ALTER SESSION SET QUERY_TAG = '" ~ dbt_query_profiler._self_identifier() ~ "'") %}
 
@@ -100,7 +103,7 @@
                 'query_text', query_text
             )
         ) within group (order by start_time desc) as result
-        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit) }})
+        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit, node_id=node_id) }})
     {% endset %}
 
     {% set results = run_query(query) %}
