@@ -50,6 +50,31 @@
 
 
 {#
+    Turn the model_name / node_id filter pair accepted by get_query_history and
+    print_query_history into a single node_id, or none if neither was supplied.
+
+    Distinct from resolve_query_id below: those two macros *filter* history rather
+    than *select* one statement, so model_name and node_id are optional filters
+    like table_name or query_type - there is no query_id branch and no "exactly one
+    required" rule, just "not both".
+#}
+{% macro _resolve_history_node_id(model_name=none, node_id=none) %}
+    {%- if model_name is not none and node_id is not none -%}
+        {{ exceptions.raise_compiler_error(
+            "Pass at most one of model_name or node_id - got model_name and node_id."
+        ) }}
+    {%- endif -%}
+    {%- if node_id is not none -%}
+        {{ return(node_id) }}
+    {%- elif model_name is not none -%}
+        {{ return(dbt_query_profiler.resolve_node_id(model_name)) }}
+    {%- else -%}
+        {{ return(none) }}
+    {%- endif -%}
+{% endmacro %}
+
+
+{#
     SQL selecting the one statement to profile for a node.
 
     get_query_history already normalises query_id / start_time / total_elapsed_time
@@ -69,14 +94,16 @@
     This only affects adapters/rows where total_elapsed_time is NULL - adapters
     that report real durations are unaffected by the tiebreak.
 #}
-{% macro _node_query_id_sql(node_id, num_candidates=10) %}
+{% macro _node_query_id_sql(node_id, num_candidates=10, result_limit=100) %}
     /* {{ dbt_query_profiler._self_identifier() }} */
     select
         query_id,
         query_type,
         total_elapsed_time,
-        start_time
-    from ({{ dbt_query_profiler.get_query_history(node_id=node_id, limit=num_candidates) }}) as recent_statements
+        start_time,
+        query_text,
+        count(*) over () as candidate_count
+    from ({{ dbt_query_profiler.get_query_history(node_id=node_id, limit=num_candidates, result_limit=result_limit) }}) as recent_statements
     order by total_elapsed_time desc nulls last, length(query_text) desc, start_time desc
     limit 1
 {% endmacro %}
@@ -84,8 +111,15 @@
 
 {#
     Turn whichever of query_id / model_name / node_id the caller supplied into a query_id.
+
+    result_limit governs how far back through history the resolution query looks when
+    gathering num_candidates for a model_name/node_id (mirrors get_query_history's own
+    result_limit - see there for why it only affects Snowflake). Default 100 matches
+    get_query_history's default. Callers with their own, differently-scoped result_limit
+    (get_query_sql, get_query_stats) thread that value through instead of exposing a
+    second one - see those macros.
 #}
-{% macro resolve_query_id(query_id=none, model_name=none, node_id=none, num_candidates=10) %}
+{% macro resolve_query_id(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=100) %}
     {%- set supplied = [] -%}
     {%- if query_id is not none %}{% do supplied.append('query_id') %}{% endif -%}
     {%- if model_name is not none %}{% do supplied.append('model_name') %}{% endif -%}
@@ -110,21 +144,28 @@
     {%- endif -%}
 
     {% do dbt_query_profiler.ensure_history_available() %}
-    {%- set results = run_query(dbt_query_profiler._node_query_id_sql(resolved_node_id, num_candidates)) -%}
+    {%- set results = run_query(dbt_query_profiler._node_query_id_sql(resolved_node_id, num_candidates, result_limit)) -%}
 
     {%- if not results or not results.rows -%}
         {{ exceptions.raise_compiler_error(
             "No queries found for " ~ resolved_node_id ~ ". Either the model has not run, "
-            ~ "or it ran outside this adapter's query history window, or the project "
-            ~ "overrides query_comment so node_id is not present in the executed SQL."
+            ~ "or more than result_limit (" ~ result_limit ~ ") other statements have run "
+            ~ "since it did - raise result_limit - or it ran outside this adapter's query "
+            ~ "history retention window, or the project overrides query_comment so node_id "
+            ~ "is not present in the executed SQL."
         ) }}
     {%- endif -%}
 
     {%- set row = results.rows[0] -%}
     {%- set duration = row[2] -%}
+    {%- set candidate_count = row[5] -%}
+    {%- set sql_preview_raw = modules.re.sub('\s+', ' ', (row[4] | string)).strip() -%}
+    {%- set sql_preview = (sql_preview_raw[:60] ~ '...') if (sql_preview_raw | length) > 60 else sql_preview_raw -%}
     {{ log("dbt_query_profiler: profiling " ~ resolved_node_id, info=True) }}
     {{ log("  chose query_id " ~ row[0] ~ " - " ~ (row[1] or 'unknown type')
            ~ (", " ~ duration ~ " ms" if duration is not none else ", duration unavailable on this adapter")
-           ~ ", " ~ row[3], info=True) }}
+           ~ ", " ~ row[3]
+           ~ " (slowest of " ~ candidate_count ~ " recent statement" ~ ('' if candidate_count == 1 else 's') ~ " for this model)"
+           ~ " - " ~ sql_preview, info=True) }}
     {{ return(row[0]) }}
 {% endmacro %}

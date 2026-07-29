@@ -23,14 +23,15 @@
 #}
 {% macro _node_id_needle(node_id) %}{{ return('"' ~ node_id ~ '"') }}{% endmacro %}
 
-{% macro get_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none) %}
+{% macro get_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none, model_name=none) %}
+    {%- set resolved_node_id = dbt_query_profiler._resolve_history_node_id(model_name, node_id) -%}
     {{ return(adapter.dispatch('get_query_history', 'dbt_query_profiler')(
         table_name=table_name,
         user_name=user_name,
         query_type=query_type,
         limit=limit,
         result_limit=result_limit,
-        node_id=node_id
+        node_id=resolved_node_id
     )) }}
 {% endmacro %}
 
@@ -40,14 +41,15 @@
 {% endmacro %}
 
 
-{% macro print_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none) %}
+{% macro print_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none, model_name=none) %}
+    {%- set resolved_node_id = dbt_query_profiler._resolve_history_node_id(model_name, node_id) -%}
     {{ return(adapter.dispatch('print_query_history', 'dbt_query_profiler')(
         table_name=table_name,
         user_name=user_name,
         query_type=query_type,
         limit=limit,
         result_limit=result_limit,
-        node_id=node_id
+        node_id=resolved_node_id
     )) }}
 {% endmacro %}
 
