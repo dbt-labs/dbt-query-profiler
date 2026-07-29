@@ -13,15 +13,24 @@
 {% macro _escape_literal(value) %}{{ (value | string).replace("'", "''") }}{% endmacro %}
 
 {#
-    The node id as it appears in dbt's query comment: a JSON string value, so wrapped in
-    double quotes. Anchoring on the quotes excludes queries that merely mention the id as
-    a single-quoted SQL literal - the package's own test fixtures do exactly that, and
-    they were outranking the real statement.
+    The node id as it appears in dbt's query comment, keyed: `"node_id": "<node_id>"`.
 
-    Deliberately does NOT include the `"node_id":` key, which would depend on the exact
-    JSON spacing dbt emits and break if that ever changed.
+    Anchoring on the surrounding double quotes alone (the previous form of this macro)
+    cannot tell "the query comment names this node" from "the query text happens to
+    mention the id in double quotes" - and because statement selection ranks candidates
+    by duration, a slow query that merely *mentions* a node id can outrank that node's own
+    (usually much faster) build, which is a silent wrong answer, not a loud one. Confirmed
+    live on Redshift: a 5.7s hand-written diagnostic query that only mentioned a node id
+    outranked the node's actual 227ms CTAS until the key was added to the needle.
+
+    Depending on dbt's `": "` key/value separator is a real risk - if dbt ever changes its
+    query_comment JSON formatting, this breaks. It's the preferable risk of the two:
+    a formatting change fails resolution loudly (on all five adapters at once, in the
+    regression tests), where the bug this replaces failed silently (profiling the wrong
+    statement with no error). The `": "` spacing was observed consistent across all five
+    supported adapters, on both dbt-core and dbt-fusion.
 #}
-{% macro _node_id_needle(node_id) %}{{ return('"' ~ node_id ~ '"') }}{% endmacro %}
+{% macro _node_id_needle(node_id) %}{{ return('"node_id": "' ~ node_id ~ '"') }}{% endmacro %}
 
 {% macro get_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none, model_name=none) %}
     {%- set resolved_node_id = dbt_query_profiler._resolve_history_node_id(model_name, node_id) -%}
