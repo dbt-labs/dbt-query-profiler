@@ -169,6 +169,13 @@
        itself (COMMIT/BEGIN and similar have no comment to strip). -#}
     {%- set raw_text = (row[4] | string).lstrip() -%}
     {%- set sql_only = raw_text.partition('*/')[2] if raw_text.startswith('/*') else raw_text -%}
+    {#- Redshift's sys_query_history.query_text stores literal two-character `\n`/`\r`/`\t`
+       escape sequences instead of real whitespace characters, so `\s+` below - which only
+       matches real whitespace - leaves them uncollapsed and the preview is escape noise
+       instead of SQL. Replace the literal sequences with a space first so both real and
+       escaped whitespace normalise the same way. Do not remove this as redundant with the
+       `\s+` collapse - it isn't, on Redshift specifically. -#}
+    {%- set sql_only = sql_only.replace('\\n', ' ').replace('\\r', ' ').replace('\\t', ' ') -%}
     {%- set sql_preview_raw = modules.re.sub('\s+', ' ', sql_only).strip() -%}
     {%- set sql_preview = (sql_preview_raw[:60] ~ '...') if (sql_preview_raw | length) > 60 else sql_preview_raw -%}
     {{ log("dbt_query_profiler: profiling " ~ resolved_node_id, info=True) }}
