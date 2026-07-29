@@ -94,7 +94,7 @@
     This only affects adapters/rows where total_elapsed_time is NULL - adapters
     that report real durations are unaffected by the tiebreak.
 #}
-{% macro _node_query_id_sql(node_id, num_candidates=10, result_limit=100) %}
+{% macro _node_query_id_sql(node_id, num_candidates=10, result_limit=1000) %}
     /* {{ dbt_query_profiler._self_identifier() }} */
     select
         query_id,
@@ -114,12 +114,16 @@
 
     result_limit governs how far back through history the resolution query looks when
     gathering num_candidates for a model_name/node_id (mirrors get_query_history's own
-    result_limit - see there for why it only affects Snowflake). Default 100 matches
-    get_query_history's default. Callers with their own, differently-scoped result_limit
-    (get_query_sql, get_query_stats) thread that value through instead of exposing a
-    second one - see those macros.
+    result_limit - see there for why it only affects Snowflake). Default 1000, not
+    get_query_history's 100: that default suits browsing (a caller-chosen page size), but
+    resolution is searching for one node's statements among *all* of a user's recent
+    statements, so it needs a wide window - a real `dbt build` easily emits more than 100
+    statements. 1000 matches get_query_sql's existing default and sits well inside
+    Snowflake's documented 10000 cap. Callers with their own, differently-scoped
+    result_limit (get_query_sql, get_query_stats) thread that value through instead of
+    exposing a second one - see those macros.
 #}
-{% macro resolve_query_id(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=100) %}
+{% macro resolve_query_id(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=1000) %}
     {%- set supplied = [] -%}
     {%- if query_id is not none %}{% do supplied.append('query_id') %}{% endif -%}
     {%- if model_name is not none %}{% do supplied.append('model_name') %}{% endif -%}

@@ -20,8 +20,12 @@ with picked as (
 
 candidates as (
     {#- Wider than _node_query_id_sql's own candidate window, so the join below
-       can't miss the row it picked - the picker's window is a subset of this one. -#}
-    {{ dbt_query_profiler.get_query_history(node_id=node_id, limit=50) }}
+       can't miss the row it picked - the picker's window is a subset of this one.
+       result_limit must be passed explicitly and kept >= _node_query_id_sql's own
+       default (1000, not get_query_history's 100) - otherwise this window can be
+       narrower than the picker's, and the join below misses a row the picker
+       correctly found further back. -#}
+    {{ dbt_query_profiler.get_query_history(node_id=node_id, limit=50, result_limit=10000) }}
 ),
 
 picked_marker_count as (

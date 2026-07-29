@@ -181,7 +181,7 @@ macros:
         description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
       - name: result_limit
         type: integer
-        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 100."
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
 
   - name: print_execution_plan
     description: |
@@ -212,7 +212,7 @@ macros:
         description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
       - name: result_limit
         type: integer
-        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 100."
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
 
   - name: get_execution_plan_summary
     description: |
@@ -234,7 +234,7 @@ macros:
         description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
       - name: result_limit
         type: integer
-        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 100."
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
 
   - name: get_query_stats
     description: |

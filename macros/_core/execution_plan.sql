@@ -1,4 +1,4 @@
-{% macro get_execution_plan(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=100) %}
+{% macro get_execution_plan(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=1000) %}
     {%- set resolved = dbt_query_profiler.resolve_query_id(query_id=query_id, model_name=model_name, node_id=node_id, num_candidates=num_candidates, result_limit=result_limit) -%}
     {{ return(adapter.dispatch('get_execution_plan', 'dbt_query_profiler')(query_id=resolved)) }}
 {% endmacro %}
@@ -9,7 +9,7 @@
 {% endmacro %}
 
 
-{% macro print_execution_plan(query_id=none, format='json', model_name=none, node_id=none, num_candidates=10, result_limit=100) %}
+{% macro print_execution_plan(query_id=none, format='json', model_name=none, node_id=none, num_candidates=10, result_limit=1000) %}
     {%- set resolved = dbt_query_profiler.resolve_query_id(query_id=query_id, model_name=model_name, node_id=node_id, num_candidates=num_candidates, result_limit=result_limit) -%}
     {{ return(adapter.dispatch('print_execution_plan', 'dbt_query_profiler')(query_id=resolved, format=format)) }}
 {% endmacro %}
@@ -20,7 +20,7 @@
 {% endmacro %}
 
 
-{% macro get_execution_plan_summary(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=100) %}
+{% macro get_execution_plan_summary(query_id=none, model_name=none, node_id=none, num_candidates=10, result_limit=1000) %}
     {%- set resolved = dbt_query_profiler.resolve_query_id(query_id=query_id, model_name=model_name, node_id=node_id, num_candidates=num_candidates, result_limit=result_limit) -%}
     {{ return(adapter.dispatch('get_execution_plan_summary', 'dbt_query_profiler')(query_id=resolved)) }}
 {% endmacro %}
