@@ -72,6 +72,7 @@
     {% endif %}
     where nvl(query_tag, '') != '{{ dbt_query_profiler._self_identifier() }}'
     {% endif %}
+        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._self_identifier()) }}' in query_text) = 0
     {% if table_name %}
         and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(query_text)) > 0
     {% endif %}

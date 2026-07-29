@@ -13,14 +13,15 @@
 -- depends_on: {{ ref('setup_test_queries') }}
 
 {% set node_id = 'model.dbt_query_profiler_integration_tests.setup_test_queries' %}
-{% set num_candidates = 5 %}
 
 with picked as (
-    {{ dbt_query_profiler._node_query_id_sql(node_id, num_candidates) }}
+    {{ dbt_query_profiler._node_query_id_sql(node_id) }}
 ),
 
 candidates as (
-    {{ dbt_query_profiler.get_query_history(node_id=node_id, limit=num_candidates) }}
+    {#- Wider than _node_query_id_sql's own candidate window, so the join below
+       can't miss the row it picked - the picker's window is a subset of this one. -#}
+    {{ dbt_query_profiler.get_query_history(node_id=node_id, limit=50) }}
 ),
 
 picked_marker_count as (

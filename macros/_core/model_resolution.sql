@@ -70,6 +70,7 @@
     that report real durations are unaffected by the tiebreak.
 #}
 {% macro _node_query_id_sql(node_id, num_candidates=10) %}
+    /* {{ dbt_query_profiler._self_identifier() }} */
     select
         query_id,
         query_type,
