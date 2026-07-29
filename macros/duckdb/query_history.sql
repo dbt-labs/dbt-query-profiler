@@ -11,6 +11,11 @@
 {% endmacro %}
 
 
+{% macro duckdb__ensure_history_available() %}
+    {{ dbt_query_profiler.duckdb__ensure_logging_enabled() }}
+{% endmacro %}
+
+
 {% macro duckdb__query_log_lookup(query_id) %}
     {#
         Resolve a query_id handed out by duckdb__get_query_history back to its SQL text.

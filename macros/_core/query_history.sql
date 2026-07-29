@@ -44,3 +44,16 @@
 {% macro default__print_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {{ exceptions.raise_compiler_error("print_query_history is not supported for adapter: " ~ target.type ~ ". Supported adapters: snowflake, bigquery, databricks, redshift, duckdb") }}
 {% endmacro %}
+
+
+{% macro ensure_history_available() %}
+    {{ return(adapter.dispatch('ensure_history_available', 'dbt_query_profiler')()) }}
+{% endmacro %}
+
+
+{#
+    Most adapters expose query history with no setup. DuckDB needs logging switched on,
+    and `dbt run-operation` does not fire the on-run-start hook that normally does it.
+#}
+{% macro default__ensure_history_available() %}
+{% endmacro %}

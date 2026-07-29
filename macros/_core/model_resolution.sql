@@ -99,11 +99,13 @@
     {%- endif -%}
 
     {%- set resolved_node_id = node_id if node_id is not none else dbt_query_profiler.resolve_node_id(model_name) -%}
-    {%- set results = run_query(dbt_query_profiler._node_query_id_sql(resolved_node_id, num_candidates)) -%}
 
     {%- if not execute -%}
         {{ return(none) }}
     {%- endif -%}
+
+    {% do dbt_query_profiler.ensure_history_available() %}
+    {%- set results = run_query(dbt_query_profiler._node_query_id_sql(resolved_node_id, num_candidates)) -%}
 
     {%- if not results or not results.rows -%}
         {{ exceptions.raise_compiler_error(
