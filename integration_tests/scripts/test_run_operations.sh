@@ -61,6 +61,37 @@ skip_test() {
     SKIPPED=$((SKIPPED + 1))
 }
 
+# Helper for tests that are expected to FAIL (e.g. mutual-exclusion validation).
+# Unlike run_test, this always returns 0 - under `set -e`, a bare top-level call
+# that returned 1 on failure would abort the whole script before the summary prints.
+run_test_expect_error() {
+    local test_name="$1"
+    local command="$2"
+    local expected_pattern="$3"
+
+    TESTS_RUN=$((TESTS_RUN + 1))
+    echo -n "Testing $test_name... "
+
+    if output=$(eval "$command" 2>&1); then
+        echo "FAIL (command succeeded, expected it to fail)"
+        echo "  Command: $command"
+        echo "  Output (last 500 chars): ...${output: -500}"
+        FAILED=$((FAILED + 1))
+        return 0
+    fi
+
+    if echo "$output" | grep -qi "$expected_pattern"; then
+        echo "PASS"
+        return 0
+    else
+        echo "FAIL (error message did not match)"
+        echo "  Expected pattern: $expected_pattern"
+        echo "  Output (last 500 chars): ...${output: -500}"
+        FAILED=$((FAILED + 1))
+        return 0
+    fi
+}
+
 # All adapters use the same test flow
 if [ "$ADAPTER" == "duckdb" ]; then
     echo "Note: DuckDB uses file-based logging for cross-session persistence."
@@ -125,6 +156,23 @@ else
         "$DBT_BIN run-operation print_query_stats --args '{query_id: \"$QUERY_ID\", format: text}' --target $TARGET" \
         "Query ID"
 fi
+
+echo ""
+echo "Testing model_name resolution..."
+echo ""
+
+# model_name happy path - asserts on content (the marker embedded in setup_test_queries'
+# SQL), not just exit status, so a resolution macro that silently returns the wrong
+# statement (or no statement) is caught, not just one that errors outright.
+run_test "print_query_sql (model_name)" \
+    "$DBT_BIN run-operation print_query_sql --args '{model_name: setup_test_queries}' --target $TARGET" \
+    "test_query_profiler_marker"
+
+# model_name and node_id are mutually exclusive - must fail with the expected message,
+# not silently pick one or the other.
+run_test_expect_error "print_query_sql (model_name + node_id mutual exclusion)" \
+    "$DBT_BIN run-operation print_query_sql --args '{model_name: setup_test_queries, node_id: \"model.dbt_query_profiler_integration_tests.setup_test_queries\"}' --target $TARGET" \
+    "exactly one of query_id, model_name or node_id"
 
 echo ""
 echo "==================================="
