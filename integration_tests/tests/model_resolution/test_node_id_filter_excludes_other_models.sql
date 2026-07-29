@@ -15,6 +15,11 @@ with by_node as (
 )
 
 -- fails if any returned statement is not the requested model's
+-- (BigQuery has no POSITION(x IN y) - see macros/bigquery/query_history.sql)
 select 'node_id filter returned a statement for another model' as failure_reason
 from by_node
+{% if target.type == 'bigquery' %}
+where strpos(query_text, '{{ node_id }}') = 0
+{% else %}
 where position('{{ node_id }}' in query_text) = 0
+{% endif %}

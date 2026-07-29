@@ -26,6 +26,9 @@ macros:
       - name: result_limit
         type: integer
         description: Number of queries to look back through. Default 100, max 10000 (Snowflake).
+      - name: node_id
+        type: string
+        description: Filter by dbt node id (e.g. 'model.my_project.my_model'), matched exactly against the node_id embedded in dbt's default query comment.
 
   - name: print_query_history
     description: |
@@ -49,6 +52,9 @@ macros:
       - name: result_limit
         type: integer
         description: Number of queries to look back through. Default 100, max 10000 (Snowflake).
+      - name: node_id
+        type: string
+        description: Filter by dbt node id (e.g. 'model.my_project.my_model'), matched exactly against the node_id embedded in dbt's default query comment.
 
   - name: get_query_sql
     description: |
