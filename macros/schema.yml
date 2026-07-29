@@ -76,7 +76,7 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: print_query_sql
     description: |
@@ -98,7 +98,7 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: get_query_plan
     description: |
@@ -172,7 +172,7 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: print_execution_plan
     description: |
@@ -200,7 +200,7 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: get_execution_plan_summary
     description: |
@@ -219,7 +219,7 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: get_query_stats
     description: |
@@ -257,7 +257,7 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: print_query_stats
     description: |
@@ -287,4 +287,4 @@ macros:
         description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
       - name: num_candidates
         type: integer
-        description: "How many of the model's most recent statements to consider before picking the slowest. Default 5. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."

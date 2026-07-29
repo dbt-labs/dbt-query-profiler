@@ -62,17 +62,21 @@
     widening it reaches back into older, slower runs.
 
     On DuckDB total_elapsed_time is always NULL (duckdb_logs has no duration), so
-    `nulls last` makes this fall through to most-recent. That is the documented
-    behaviour there, not a bug.
+    `nulls last` falls through to the length(query_text) tiebreak, and then to
+    most-recent. A table build emits several short housekeeping statements
+    (rename, drop backup) alongside the one real create-as-select; among equally
+    timeless candidates the longest statement is far more likely to be that one.
+    This only affects adapters/rows where total_elapsed_time is NULL - adapters
+    that report real durations are unaffected by the tiebreak.
 #}
-{% macro _node_query_id_sql(node_id, num_candidates=5) %}
+{% macro _node_query_id_sql(node_id, num_candidates=10) %}
     select
         query_id,
         query_type,
         total_elapsed_time,
         start_time
     from ({{ dbt_query_profiler.get_query_history(node_id=node_id, limit=num_candidates) }}) as recent_statements
-    order by total_elapsed_time desc nulls last, start_time desc
+    order by total_elapsed_time desc nulls last, length(query_text) desc, start_time desc
     limit 1
 {% endmacro %}
 
@@ -80,7 +84,7 @@
 {#
     Turn whichever of query_id / model_name / node_id the caller supplied into a query_id.
 #}
-{% macro resolve_query_id(query_id=none, model_name=none, node_id=none, num_candidates=5) %}
+{% macro resolve_query_id(query_id=none, model_name=none, node_id=none, num_candidates=10) %}
     {%- set supplied = [] -%}
     {%- if query_id is not none %}{% do supplied.append('query_id') %}{% endif -%}
     {%- if model_name is not none %}{% do supplied.append('model_name') %}{% endif -%}

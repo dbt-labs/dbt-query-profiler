@@ -72,7 +72,7 @@
         and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(message)) > 0
     {% endif %}
     {% if node_id %}
-        and position('{{ dbt_query_profiler._escape_literal(node_id) }}' in message) > 0
+        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._node_id_needle(node_id)) }}' in message) > 0
     {% endif %}
     order by start_time desc
     limit {{ limit }}

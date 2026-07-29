@@ -76,7 +76,7 @@
         and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(query_text)) > 0
     {% endif %}
     {% if node_id %}
-        and position('{{ dbt_query_profiler._escape_literal(node_id) }}' in query_text) > 0
+        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._node_id_needle(node_id)) }}' in query_text) > 0
     {% endif %}
     {% if query_type %}
         and query_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'

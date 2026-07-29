@@ -12,6 +12,17 @@
 #}
 {% macro _escape_literal(value) %}{{ (value | string).replace("'", "''") }}{% endmacro %}
 
+{#
+    The node id as it appears in dbt's query comment: a JSON string value, so wrapped in
+    double quotes. Anchoring on the quotes excludes queries that merely mention the id as
+    a single-quoted SQL literal - the package's own test fixtures do exactly that, and
+    they were outranking the real statement.
+
+    Deliberately does NOT include the `"node_id":` key, which would depend on the exact
+    JSON spacing dbt emits and break if that ever changed.
+#}
+{% macro _node_id_needle(node_id) %}{{ return('"' ~ node_id ~ '"') }}{% endmacro %}
+
 {% macro get_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none) %}
     {{ return(adapter.dispatch('get_query_history', 'dbt_query_profiler')(
         table_name=table_name,
