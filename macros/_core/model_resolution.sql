@@ -159,7 +159,13 @@
     {%- set row = results.rows[0] -%}
     {%- set duration = row[2] -%}
     {%- set candidate_count = row[5] -%}
-    {%- set sql_preview_raw = modules.re.sub('\s+', ' ', (row[4] | string)).strip() -%}
+    {#- Every dbt-emitted statement starts with the same query_comment - previewing it
+       verbatim would show a constant string regardless of which statement won, which
+       defeats the point of the preview. Strip it first so the preview is the SQL
+       itself (COMMIT/BEGIN and similar have no comment to strip). -#}
+    {%- set raw_text = (row[4] | string).lstrip() -%}
+    {%- set sql_only = raw_text.partition('*/')[2] if raw_text.startswith('/*') else raw_text -%}
+    {%- set sql_preview_raw = modules.re.sub('\s+', ' ', sql_only).strip() -%}
     {%- set sql_preview = (sql_preview_raw[:60] ~ '...') if (sql_preview_raw | length) > 60 else sql_preview_raw -%}
     {{ log("dbt_query_profiler: profiling " ~ resolved_node_id, info=True) }}
     {{ log("  chose query_id " ~ row[0] ~ " - " ~ (row[1] or 'unknown type')
