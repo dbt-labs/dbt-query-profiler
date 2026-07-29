@@ -6,12 +6,16 @@
     Computed entirely in Jinja/run_query, then rendered as a trivial static assertion
     (same pattern as test_resolve_node_id.sql), rather than as one compiled SQL statement,
     for two reasons:
-    1. Snowflake's query_history_by_user includes the currently-running query itself (it
-       has no "state = DONE" filter, unlike BigQuery). A single self-contained SELECT that
-       both injects a poison statement and checks history for it would find itself - it
-       embeds both the poison marker and the double-quoted node id as literals in its own
-       text. Tagging the session with the package's self-identifier (the same mechanism
-       print_query_history uses) excludes the currently-running query from view.
+    1. snowflake__get_query_history now filters out anything but
+       execution_status = 'SUCCESS', which excludes a query from matching *itself* while
+       it is still running (it cannot have completed with SUCCESS before it finishes).
+       That is not enough on its own, though: the two check queries below embed the
+       double-quoted node id and the poison marker as literals in their own SQL text, and
+       once THIS test run finishes, those two queries themselves become ordinary completed,
+       successful rows in history - indistinguishable from real matches on any later run of
+       this same test (Snowflake's default retention is 7 days). Tagging the session with
+       the package's self-identifier (the same mechanism print_query_history uses) is what
+       excludes them, this run and every later one - the SUCCESS filter alone does not.
     2. Building the poison statement and re-querying history are two separate statements
        either way (a single SQL statement can't run_query a side effect mid-select), so
        there is no portability cost to doing the comparison in Jinja too.
@@ -52,10 +56,12 @@
     {% do run_query(poison_sql) %}
 
     {#
-        Snowflake's query_history_by_user has no "state = DONE" filter, so it includes
-        the currently-running query - tag this session so get_query_history's
-        self-exclusion filter hides only the two check queries below (the same
-        mechanism print_query_history uses), not the poison statement above.
+        Tag this session so get_query_history's query_tag self-exclusion filter hides
+        only the two check queries below (the same mechanism print_query_history uses),
+        not the poison statement above. See the file-level comment: this is still needed
+        even with the execution_status = 'SUCCESS' filter, because on a later run these
+        two queries are themselves completed, successful rows that embed the same
+        literals they're searching for.
     #}
     {% if target.type == 'snowflake' %}
         {% do run_query("ALTER SESSION SET QUERY_TAG = '" ~ dbt_query_profiler._self_identifier() ~ "'") %}
