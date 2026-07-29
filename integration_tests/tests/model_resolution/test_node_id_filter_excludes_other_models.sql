@@ -3,6 +3,11 @@
 
     setup_test_queries and setup_second_model both contain the test marker, so a
     table_name substring match returns both. Filtering by node id must return only one.
+    Also asserts at least one statement is returned, on adapters whose query history
+    is immediate (duckdb, snowflake, bigquery) - otherwise an empty result set would
+    pass this test having exercised nothing. Databricks and redshift query history
+    lags execution by minutes, so a hard count there would be flaky; they are only
+    checked by the negative assertion above.
 #}
 
 -- depends_on: {{ ref('setup_test_queries') }}
@@ -22,4 +27,13 @@ from by_node
 where strpos(query_text, '{{ node_id }}') = 0
 {% else %}
 where position('{{ node_id }}' in query_text) = 0
+{% endif %}
+
+{% if target.type in ['duckdb', 'snowflake', 'bigquery'] %}
+union all
+
+-- fails if the filter returned nothing at all
+select 'node_id filter returned zero statements' as failure_reason
+from (select count(*) as n from by_node) as counted
+where n = 0
 {% endif %}
