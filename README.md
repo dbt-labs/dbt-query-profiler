@@ -2,6 +2,21 @@
 
 A dbt package for querying and analyzing query history and execution plans across data warehouses.
 
+## Contents
+
+- [Supported adapters](#supported-adapters)
+- [Use from the CLI or from an agent](#use-from-the-cli-or-from-an-agent)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Requirements and limitations](#requirements-and-limitations)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Example: profile the slowest models from a run](#example-profile-the-slowest-models-from-a-run)
+- [Macros reference](#macros-reference)
+- [Adapter notes](#adapter-notes)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Supported adapters
 
 | Feature | Snowflake | BigQuery | Databricks | Redshift | DuckDB |
@@ -20,17 +35,19 @@ A dbt package for querying and analyzing query history and execution plans acros
 
 † BigQuery does not expose operator-level execution plans. `print_execution_plan` returns **Query Insights** (`performance_insights` from `INFORMATION_SCHEMA`) — performance diagnostics such as slot contention, high cardinality joins, and partition skew. See [BigQuery Query Insights](https://cloud.google.com/bigquery/docs/query-insights).
 
-## Built for AI agents
+## Use from the CLI or from an agent
 
-Behind one interface, this package encodes five warehouses' native query-history mechanics: Snowflake's `get_query_operator_stats()`, BigQuery's `INFORMATION_SCHEMA.JOBS_BY_USER`, Databricks' `system.query.history`, Redshift's `stl_explain` reached through `stl_query` correlated by transaction id (`xid`), and DuckDB's `duckdb_logs`. An agent calling `print_query_stats` or `print_execution_plan` runs the same triage loop — find the query, check the plan, check the stats — on any of them without knowing any of that.
+Behind one interface, this package encodes five warehouses' native query-history mechanics: Snowflake's `get_query_operator_stats()`, BigQuery's `INFORMATION_SCHEMA.JOBS_BY_USER`, Databricks' `system.query.history`, Redshift's `stl_explain` reached through `stl_query` correlated by transaction id (`xid`), and DuckDB's `duckdb_logs`. The same triage loop — find the query, check the plan, check the stats — works on any of them without knowing any of that.
 
-Install the companion skill so your agent knows how to use it. Run this from your **main project directory** (where `dbt_packages/` lives):
+Every macro is a plain `dbt run-operation`, so it is equally usable by hand. Agents benefit most from the multi-model sweeps, where a human would be copying query IDs between commands.
+
+Optional companion skill, so an agent knows the workflow. Run from your **main project directory** (where `dbt_packages/` lives):
 
 ```bash
 npx skills add ./dbt_packages/dbt_query_profiler/.claude/skills/using-dbt-query-profiler-package
 ```
 
-This installs the `using-dbt-query-profiler-package` skill, which teaches your AI agent how to use the profiler — getting query IDs, retrieving execution plans, comparing model performance, and interpreting results.
+This installs the `using-dbt-query-profiler-package` skill. Nothing else depends on it; the macros behave the same without it.
 
 ## Installation
 
@@ -58,11 +75,28 @@ dbt run-operation print_execution_plan --args '{model_name: my_model, format: te
 
 ## Requirements and limitations
 
-- **Depends on the query comment.** `model_name` (and `node_id`) resolution reads `node_id` out of dbt's default `query_comment`, which is embedded in every statement dbt sends to the warehouse. If your project overrides `query_comment`, keep `node_id` in it — this feature has no other way to find a model's statements in query history.
-- **`model_name` only resolves models.** `resolve_node_id` matches against `resource_type == 'model'` in the dbt graph, so snapshots and seeds are not resolvable by `model_name`. Use `node_id=` for those instead — it's a substring match against the query comment, not a graph lookup, so it works for any resource type (e.g. `node_id: snapshot.my_project.my_snapshot`).
-- **Statement selection is an approximation.** dbt's query comment carries no `invocation_id`, so the exact run boundary can't be recovered from query history. Resolution picks the slowest of the `num_candidates` (default 10) most recent statements for that node, out of the last `result_limit` (default 1000) statements in that adapter's history source (`total_elapsed_time` desc, ties broken by longest query text, then most recent start time). On DuckDB, whose `duckdb_logs` has no duration column, every candidate ties and the longest statement wins instead — normally the model's real build, not the short `drop`/`alter` housekeeping statements around it. Whichever statement is chosen is always logged with how many candidates were considered and a short preview of its SQL (the query comment is stripped first, so the preview is the SQL itself, not dbt's boilerplate), e.g. `chose query_id ... (slowest of 3 recent statements for this model) - create table "my_model__dbt_tmp" as ( select ...`, so a wrong pick is visible immediately. If the model actually ran further back than `result_limit` other statements ago, resolution reports "No queries found" — raise `result_limit`.
-- **Query history has per-adapter latency and retention.** In testing, Databricks' `system.query.history` lagged roughly three minutes behind the query actually running, and Redshift's `stl_query`/`stl_explain` tables are pruned aggressively. A model profiled seconds after it runs may not be visible yet — wait and retry before assuming a bug.
-- **Custom `get_query_history` overrides need a `node_id` parameter.** The core `get_query_history` macro now always passes `node_id` (and resolves `model_name` to it) to `adapter.dispatch(...)`, unconditionally. If your project defines its own out-of-tree `<adapter>__get_query_history` override, add a `node_id=none` parameter to its signature or the dispatch call will fail with an unexpected-keyword-argument error.
+- **Needs dbt's default `query_comment`.** Resolution reads `node_id` from it. If you override `query_comment`, keep `node_id` in it.
+- **`model_name` resolves models only.** For snapshots and seeds, pass `node_id=` (e.g. `node_id: snapshot.my_project.my_snapshot`), which is matched against the query comment rather than looked up in the graph.
+- **Statement selection is an approximation** — see below.
+- **Query history lags and expires.** Databricks lagged ~3 minutes in testing; Redshift's STL tables are pruned aggressively. A model profiled seconds after running may not be visible yet.
+- **Out-of-tree `<adapter>__get_query_history` overrides need a `node_id=none` parameter**, since the core macro always dispatches it.
+
+<details>
+<summary>How a statement is selected, and why it is approximate</summary>
+
+dbt's query comment carries no `invocation_id`, so "the statement from this run" cannot be identified. Resolution takes the `num_candidates` (default 10) most recent statements for the node, from the last `result_limit` (default 1000) in the adapter's history source, and picks the slowest: `total_elapsed_time` desc, then longest query text, then most recent start time.
+
+DuckDB reports no duration, so every candidate ties and the longest statement wins — normally the model's build rather than the surrounding `drop`/`alter` statements.
+
+The chosen statement is logged with the candidate count and a SQL preview:
+
+```
+chose query_id ... (slowest of 3 recent statements for this model) - create table "my_model__dbt_tmp" as ( select ...
+```
+
+If the model ran further back than `result_limit` statements ago, resolution reports "No queries found"; raise `result_limit`.
+
+</details>
 
 ## Configuration
 
@@ -227,9 +261,9 @@ Cache Hit:    True
 
 </details>
 
-## Profile the slowest models from a run
+## Example: profile the slowest models from a run
 
-`target/run_results.json` already has each model's execution time after a `dbt build` or `dbt run`. This script ranks the slowest ones and profiles each by `node_id` directly — no manual query-ID lookups.
+Not part of the package — an example to copy and adapt. `target/run_results.json` holds each model's execution time after a `dbt build` or `dbt run`; this ranks the slowest and profiles each by `node_id`.
 
 <details>
 <summary>rank_and_profile.py</summary>
@@ -274,35 +308,43 @@ if __name__ == "__main__":
 
 </details>
 
-The commands below are this package's own `integration_tests` project — in your project, just run `dbt build` (or `dbt run`) then point the script at your `target/run_results.json`. The script shells out to plain `dbt`, so run it where `dbt` resolves on your `PATH`:
+In your project, run `dbt build` (or `dbt run`) and point the script at the results:
 
 ```bash
-cd integration_tests
-export DBT_PROFILES_DIR=$PWD/profiles DUCKDB_PATH=target/t.duckdb
-dbt build --target duckdb --select tag:setup --full-refresh
-uv run --python 3.11 python rank_and_profile.py target/run_results.json duckdb
+dbt build
+uv run --python 3.11 python rank_and_profile.py target/run_results.json
 ```
 
-Real output against this package's own integration test project (dbt's per-call startup banner omitted for brevity; each `{ ... }` is a full JSON payload because DuckDB's query stats re-executes the query via `EXPLAIN ANALYZE`):
+Two notes. Use `python -u` if you redirect output — dbt writes unbuffered while python buffers, so headers otherwise land out of order. And every `dbt` call rewrites `target/run_results.json`, including the `run-operation` calls this script makes, so copy the file aside to re-run without rebuilding.
+
+Real output against Snowflake, startup banners removed and later stats bodies abbreviated:
 
 ```
-=== model.dbt_query_profiler_integration_tests.setup_second_model — 0.1s per dbt ===
-dbt_query_profiler: profiling model.dbt_query_profiler_integration_tests.setup_second_model
-  chose query_id 70:1785321074942803 - unknown type, duration unavailable on this adapter, 2026-07-29 12:31:14.942803+02:00
+=== model.dbt_query_profiler_integration_tests.setup_enable_logging — 2.4s per dbt ===
+  chose query_id 01c6308d-060d-05a4-0004-7d833ff2b306 - CREATE_VIEW, 944 ms, 2026-08-05 16:13:31+00:00 (slowest of 10 recent statements for this model) - create or replace view analytics.dbt_bperigaud.setup_enab...
+{
+  "bytes_scanned": 0,
+  "bytes_written_to_result": 51,
+  "compilation_time_ms": 128,
+  "execution_status": "SUCCESS",
+  "execution_time_ms": 944,
+  "execution_time_only_ms": 816,
+  "query_type": "CREATE_VIEW",
+  "queue_time_ms": 0,
+  "rows_produced": 0,
+  "warehouse_name": "TRANSFORMING"
+}
+
+=== model.dbt_query_profiler_integration_tests.setup_second_model — 2.3s per dbt ===
+  chose query_id 01c62f73-060d-0789-0004-7d833fecad6a - CREATE_TABLE_AS_SELECT, 2110 ms, 2026-08-05 11:31:30+00:00 (slowest of 10 recent statements for this model) - create or replace transient table analytics...
 { ... }
 
-=== model.dbt_query_profiler_integration_tests.setup_enable_logging — 0.1s per dbt ===
-dbt_query_profiler: profiling model.dbt_query_profiler_integration_tests.setup_enable_logging
-  chose query_id 66:1785321074942537 - unknown type, duration unavailable on this adapter, 2026-07-29 12:31:14.942537+02:00
-{ ... }
-
-=== model.dbt_query_profiler_integration_tests.setup_test_queries — 0.0s per dbt ===
-dbt_query_profiler: profiling model.dbt_query_profiler_integration_tests.setup_test_queries
-  chose query_id 127:1785321074985640 - unknown type, duration unavailable on this adapter, 2026-07-29 12:31:14.985640+02:00
+=== model.dbt_query_profiler_integration_tests.setup_test_queries — 1.2s per dbt ===
+  chose query_id 01c6308d-060d-06d1-0004-7d833ff297b6 - CREATE_TABLE_AS_SELECT, 910 ms, 2026-08-05 16:13:32+00:00 (slowest of 10 recent statements for this model) - create or replace transient table analytics...
 { ... }
 ```
 
-Every model on DuckDB shows "duration unavailable on this adapter" — that's the no-duration tiebreak from [Requirements and limitations](#requirements-and-limitations), and it still picked the right statement each time.
+The second entry resolved to a statement from 11:31 while the build ran at 16:13 — the approximation described above, with the log line showing exactly which statement was used.
 
 ## Macros reference
 
@@ -484,10 +526,7 @@ When you enable logging with the same `storage_path` in a new session, logs from
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new adapters
-4. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
