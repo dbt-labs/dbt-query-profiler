@@ -2,7 +2,22 @@
 
 A dbt package for querying and analyzing query history and execution plans across data warehouses.
 
-## Supported Adapters
+## Contents
+
+- [Supported adapters](#supported-adapters)
+- [Use from the CLI or from an agent](#use-from-the-cli-or-from-an-agent)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Requirements and limitations](#requirements-and-limitations)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Example: profile the slowest models from a run](#example-profile-the-slowest-models-from-a-run)
+- [Macros reference](#macros-reference)
+- [Adapter notes](#adapter-notes)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Supported adapters
 
 | Feature | Snowflake | BigQuery | Databricks | Redshift | DuckDB |
 |---------|:---------:|:--------:|:----------:|:--------:|:------:|
@@ -20,6 +35,20 @@ A dbt package for querying and analyzing query history and execution plans acros
 
 † BigQuery does not expose operator-level execution plans. `print_execution_plan` returns **Query Insights** (`performance_insights` from `INFORMATION_SCHEMA`) — performance diagnostics such as slot contention, high cardinality joins, and partition skew. See [BigQuery Query Insights](https://cloud.google.com/bigquery/docs/query-insights).
 
+## Use from the CLI or from an agent
+
+Behind one interface, this package encodes five warehouses' native query-history mechanics: Snowflake's `get_query_operator_stats()`, BigQuery's `INFORMATION_SCHEMA.JOBS_BY_USER`, Databricks' `system.query.history`, Redshift's `stl_explain` reached through `stl_query` correlated by transaction id (`xid`), and DuckDB's `duckdb_logs`. The same triage loop — find the query, check the plan, check the stats — works on any of them without knowing any of that.
+
+Every macro is a plain `dbt run-operation`, so it is equally usable by hand. Agents benefit most from the multi-model sweeps, where a human would be copying query IDs between commands.
+
+Optional companion skill, so an agent knows the workflow. Run from your **main project directory** (where `dbt_packages/` lives):
+
+```bash
+npx skills add ./dbt_packages/dbt_query_profiler/.claude/skills/using-dbt-query-profiler-package
+```
+
+This installs the `using-dbt-query-profiler-package` skill. Nothing else depends on it; the macros behave the same without it.
+
 ## Installation
 
 Add to your `packages.yml`:
@@ -35,15 +64,39 @@ Then run:
 dbt deps
 ```
 
-## AI Agent Integration
+## Quickstart
 
-After installing the package, you can install the companion skill for your AI assistant. Run this from your **main project directory** (where `dbt_packages/` lives):
+Profile a model by name — no query IDs, no node IDs:
 
 ```bash
-npx skills add ./dbt_packages/dbt_query_profiler/.claude/skills/using-dbt-query-profiler-package
+dbt run-operation print_query_stats --args '{model_name: my_model}'
+dbt run-operation print_execution_plan --args '{model_name: my_model, format: text}'
 ```
 
-This installs the `using-dbt-query-profiler-package` skill, which teaches your AI agent how to use the profiler — getting query IDs, retrieving execution plans, comparing model performance, and interpreting results.
+## Requirements and limitations
+
+- **Needs dbt's default `query_comment`.** Resolution reads `node_id` from it. If you override `query_comment`, keep `node_id` in it.
+- **`model_name` resolves models only.** For snapshots and seeds, pass `node_id=` (e.g. `node_id: snapshot.my_project.my_snapshot`), which is matched against the query comment rather than looked up in the graph.
+- **Statement selection is an approximation** — see below.
+- **Query history lags and expires.** Databricks lagged ~3 minutes in testing; Redshift's STL tables are pruned aggressively. A model profiled seconds after running may not be visible yet.
+- **Out-of-tree `<adapter>__get_query_history` overrides need a `node_id=none` parameter**, since the core macro always dispatches it.
+
+<details>
+<summary>How a statement is selected, and why it is approximate</summary>
+
+dbt's query comment carries no `invocation_id`, so "the statement from this run" cannot be identified. Resolution takes the `num_candidates` (default 10) most recent statements for the node, from the last `result_limit` (default 1000) in the adapter's history source, and picks the slowest: `total_elapsed_time` desc, then longest query text, then most recent start time.
+
+DuckDB reports no duration, so every candidate ties and the longest statement wins — normally the model's build rather than the surrounding `drop`/`alter` statements.
+
+The chosen statement is logged with the candidate count and a SQL preview:
+
+```
+chose query_id ... (slowest of 3 recent statements for this model) - create table "my_model__dbt_tmp" as ( select ...
+```
+
+If the model ran further back than `result_limit` statements ago, resolution reports "No queries found"; raise `result_limit`.
+
+</details>
 
 ## Configuration
 
@@ -69,7 +122,7 @@ regular users see only their own unless granted `SYSLOG ACCESS UNRESTRICTED`
 `use_account_level_history: true` stops the package filtering by username, but it cannot grant
 access — without the privilege you will still only see your own queries.
 
-### Custom Query History Source
+### Custom query history source
 
 If your admin provides access to query history via a custom view (instead of the default system tables), you can override the source:
 
@@ -89,7 +142,7 @@ Your custom view must have columns compatible with the expected schema (e.g., `q
 
 ## Usage
 
-### Query History
+### Query history
 
 Get recent queries:
 ```bash
@@ -101,6 +154,9 @@ dbt run-operation print_query_history --args '{table_name: customers, limit: 10}
 
 # Get queries from all users (Snowflake)
 dbt run-operation print_query_history --args '{user_name: "", limit: 5}'
+
+# Get all recent statements for a specific model, instead of just the one picked for profiling
+dbt run-operation print_query_history --args '{model_name: my_model, limit: 10}'
 ```
 
 ### Query SQL
@@ -110,7 +166,7 @@ Get the SQL text for a specific query:
 dbt run-operation print_query_sql --args '{query_id: "01c20db1-060a-bcad-0004-7d832cd6b002"}'
 ```
 
-### Query Plan (Estimated)
+### Query plan (estimated)
 
 Get the estimated execution plan for any SQL query using EXPLAIN:
 ```bash
@@ -123,7 +179,7 @@ dbt run-operation print_query_plan --args '{sql: "SELECT 1", format: text}'
 
 **Note:** This runs EXPLAIN on the SQL without executing it. No query history access required.
 
-### Execution Plan (Actual)
+### Execution plan (actual)
 
 Get the actual execution plan from a previously run query:
 ```bash
@@ -147,7 +203,7 @@ Example text output (Snowflake):
 
 **Note:** This retrieves actual execution statistics from the query history. Requires query history access.
 
-### Query Stats
+### Query stats
 
 Get execution statistics for a query:
 ```bash
@@ -158,7 +214,10 @@ dbt run-operation print_query_stats --args '{query_id: "01c20db1-..."}'
 dbt run-operation print_query_stats --args '{query_id: "01c20db1-...", format: text}'
 ```
 
-Example text output (Snowflake):
+<details>
+<summary>Sample text output, one per adapter</summary>
+
+Snowflake:
 ```
 Query ID:     01c20db1-060a-bcad-0004-7d832cd6b002
 Status:       SUCCESS
@@ -168,7 +227,7 @@ Rows:         10,000
 Bytes Out:    524,288
 ```
 
-Example text output (BigQuery):
+BigQuery:
 ```
 Query ID:     bquxjob_abc123_0123456789
 Status:       DONE
@@ -179,7 +238,7 @@ Cache Hit:    False
 Slot MS:      15000
 ```
 
-Example text output (Databricks):
+Databricks:
 ```
 Query ID:     01234567-89ab-cdef-0123-456789abcdef
 Status:       FINISHED
@@ -190,7 +249,7 @@ Bytes Out:    1,048,576
 Cache Hit:    False
 ```
 
-Example text output (Redshift):
+Redshift:
 ```
 Query ID:     12345678
 Status:       success
@@ -200,9 +259,99 @@ Rows:         5,000
 Cache Hit:    True
 ```
 
-## Macros Reference
+</details>
 
-### Query History
+## Example: profile the slowest models from a run
+
+Not part of the package — an example to copy and adapt. `target/run_results.json` holds each model's execution time after a `dbt build` or `dbt run`; this ranks the slowest and profiles each by `node_id`.
+
+<details>
+<summary>rank_and_profile.py</summary>
+
+```python
+#!/usr/bin/env python3
+"""Rank models by execution time from run_results.json, then profile the slowest."""
+import json
+import subprocess
+import sys
+
+TOP_N = 3
+
+def slowest_models(run_results_path, top_n=TOP_N):
+    """Return (node_id, seconds) for the slowest successful models, slowest first."""
+    with open(run_results_path) as fh:
+        results = json.load(fh)["results"]
+    models = [
+        (r["unique_id"], r["execution_time"])
+        for r in results
+        if r["unique_id"].startswith("model.") and r["status"] == "success"
+    ]
+    return sorted(models, key=lambda pair: pair[1], reverse=True)[:top_n]
+
+def main():
+    path = sys.argv[1] if len(sys.argv) > 1 else "target/run_results.json"
+    target = sys.argv[2] if len(sys.argv) > 2 else None
+
+    for node_id, seconds in slowest_models(path):
+        print(f"\n=== {node_id} — {seconds:.1f}s per dbt ===")
+        cmd = [
+            "dbt", "run-operation", "print_query_stats",
+            "--args", f"{{node_id: {node_id}}}",
+        ]
+        if target:
+            cmd += ["--target", target]
+        subprocess.run(cmd, check=False)
+
+if __name__ == "__main__":
+    main()
+```
+
+</details>
+
+In your project, run `dbt build` (or `dbt run`) and point the script at the results:
+
+```bash
+dbt build
+uv run --python 3.11 python rank_and_profile.py target/run_results.json
+```
+
+Two notes. Use `python -u` if you redirect output — dbt writes unbuffered while python buffers, so headers otherwise land out of order. And every `dbt` call rewrites `target/run_results.json`, including the `run-operation` calls this script makes, so copy the file aside to re-run without rebuilding.
+
+Real output against Snowflake, startup banners removed and later stats bodies abbreviated:
+
+```
+=== model.dbt_query_profiler_integration_tests.setup_enable_logging — 2.4s per dbt ===
+  chose query_id 01c6308d-060d-05a4-0004-7d833ff2b306 - CREATE_VIEW, 944 ms, 2026-08-05 16:13:31+00:00 (slowest of 10 recent statements for this model) - create or replace view analytics.dbt_bperigaud.setup_enab...
+{
+  "bytes_scanned": 0,
+  "bytes_written_to_result": 51,
+  "compilation_time_ms": 128,
+  "execution_status": "SUCCESS",
+  "execution_time_ms": 944,
+  "execution_time_only_ms": 816,
+  "query_type": "CREATE_VIEW",
+  "queue_time_ms": 0,
+  "rows_produced": 0,
+  "warehouse_name": "TRANSFORMING"
+}
+
+=== model.dbt_query_profiler_integration_tests.setup_second_model — 2.3s per dbt ===
+  chose query_id 01c62f73-060d-0789-0004-7d833fecad6a - CREATE_TABLE_AS_SELECT, 2110 ms, 2026-08-05 11:31:30+00:00 (slowest of 10 recent statements for this model) - create or replace transient table analytics...
+{ ... }
+
+=== model.dbt_query_profiler_integration_tests.setup_test_queries — 1.2s per dbt ===
+  chose query_id 01c6308d-060d-06d1-0004-7d833ff297b6 - CREATE_TABLE_AS_SELECT, 910 ms, 2026-08-05 16:13:32+00:00 (slowest of 10 recent statements for this model) - create or replace transient table analytics...
+{ ... }
+```
+
+The second entry resolved to a statement from 11:31 while the build ran at 16:13 — the approximation described above, with the log line showing exactly which statement was used.
+
+## Macros reference
+
+<details>
+<summary>Full argument reference for every macro</summary>
+
+### Query history
 
 | Macro | Description |
 |-------|-------------|
@@ -215,6 +364,8 @@ Cache Hit:    True
 - `query_type` (string): Filter by type (SELECT, INSERT, CREATE_TABLE_AS_SELECT, etc.)
 - `limit` (int): Number of queries to return (default: 1)
 - `result_limit` (int): Lookback depth (default: 100, max: 10000)
+- `node_id` (string): Filter by dbt node id (e.g. `model.my_project.my_model`), matched against the node id embedded in dbt's default query comment
+- `model_name` (string): Filter by dbt model name, resolved to a node id via the dbt graph. Mutually exclusive with `node_id`
 
 ### Query SQL
 
@@ -225,8 +376,11 @@ Cache Hit:    True
 
 **Arguments:**
 - `query_id` (string): The query ID
+- `model_name` (string): Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with `query_id` and `node_id`.
+- `node_id` (string): Profile by dbt node id (e.g. `model.my_project.my_model`), skipping graph lookup. Useful when you already have one, e.g. from `run_results.json`. Mutually exclusive with `query_id` and `model_name`.
+- `num_candidates` (int): Number of recent statements for the resolved node to consider when picking which one to profile (default: 10)
 
-### Query Plan (Estimated)
+### Query plan (estimated)
 
 | Macro | Description |
 |-------|-------------|
@@ -237,7 +391,7 @@ Cache Hit:    True
 - `sql` (string): The SQL query to explain
 - `format` (string): Output format - 'text' (default), 'json'
 
-### Execution Plan (Actual)
+### Execution plan (actual)
 
 | Macro | Description |
 |-------|-------------|
@@ -248,8 +402,11 @@ Cache Hit:    True
 **Arguments:**
 - `query_id` (string): The query ID from query history
 - `format` (string): Output format - 'json', 'text', or 'markdown' (Snowflake)
+- `model_name` (string): Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with `query_id` and `node_id`.
+- `node_id` (string): Profile by dbt node id (e.g. `model.my_project.my_model`), skipping graph lookup. Useful when you already have one, e.g. from `run_results.json`. Mutually exclusive with `query_id` and `model_name`.
+- `num_candidates` (int): Number of recent statements for the resolved node to consider when picking which one to profile (default: 10)
 
-### Query Stats
+### Query stats
 
 | Macro | Description |
 |-------|-------------|
@@ -260,6 +417,9 @@ Cache Hit:    True
 - `query_id` (string): The query ID
 - `format` (string): Output format - 'json' (default) or 'text'
 - `result_limit` (int): Lookback depth (default: 10000, max: 10000 for Snowflake)
+- `model_name` (string): Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with `query_id` and `node_id`.
+- `node_id` (string): Profile by dbt node id (e.g. `model.my_project.my_model`), skipping graph lookup. Useful when you already have one, e.g. from `run_results.json`. Mutually exclusive with `query_id` and `model_name`.
+- `num_candidates` (int): Number of recent statements for the resolved node to consider when picking which one to profile (default: 10)
 
 **Snowflake metrics:** bytes_scanned, bytes_written_to_result, rows_produced, compilation_time, queue_time, credits
 
@@ -269,50 +429,80 @@ Cache Hit:    True
 
 **Redshift metrics:** returned_bytes, returned_rows, compile_time, execution_time, queue_time, planning_time, result_cache_hit
 
-## Permissions
+</details>
 
-### Snowflake
+## Adapter notes
+
+Permissions and quirks together, one collapsed section per adapter.
+
+<details>
+<summary>Snowflake</summary>
 
 | Mode | Source | Permissions Required | Retention | Latency |
 |------|--------|---------------------|-----------|---------|
 | User-scoped (default) | `information_schema.query_history()` | None (own queries only) | 7 days | None |
 | Account-level | `snowflake.account_usage.query_history` | `IMPORTED PRIVILEGES` on `SNOWFLAKE` database | 365 days | Up to 45 min |
 
-**Query Plan:** Requires no additional permissions (uses `get_query_operator_stats()`)
+- **Query Plan:** Requires no additional permissions (uses `get_query_operator_stats()`)
+- Query history uses `query_history_by_user()` when filtering by user, for better performance
+- A query tag (`dbt_query_profiler`) is set to exclude the macro's own queries from results
+- `result_limit` max is 10,000
 
-### BigQuery
+</details>
+
+<details>
+<summary>BigQuery</summary>
 
 | Mode | Source | Permissions Required | Retention |
 |------|--------|---------------------|-----------|
 | User-scoped (default) | `INFORMATION_SCHEMA.JOBS_BY_USER` | None (own jobs only) | 180 days |
 | Project-level | `INFORMATION_SCHEMA.JOBS_BY_PROJECT` | `bigquery.jobs.list` or `BigQuery Resource Viewer` role | 180 days |
 
-### Databricks
+- Query plan (EXPLAIN) is not available via SQL (use the BigQuery console or API)
+- **Execution Plan:** Returns [Query Insights](https://cloud.google.com/bigquery/docs/query-insights) instead of an operator-level plan — diagnostics include slot contention, high cardinality joins, partition skew, and shuffle quota issues. Returns `null` insights if no performance issues were detected.
+- Region is read from `target.location` in your profile (defaults to 'us' if not set)
+
+</details>
+
+<details>
+<summary>Databricks</summary>
 
 | Mode | Source | Permissions Required | Retention |
 |------|--------|---------------------|-----------|
 | User-scoped (default) | `system.query.history` (filtered) | `USE CATALOG` on `system`, `USE SCHEMA` on `system.query`, `SELECT` on `system.query.history` | 90 days |
 | Account-level | `system.query.history` (all users) | Same as above | 90 days |
 
-**Note:** By default, only metastore admins have access to `system.query.history`. Admins can grant access:
+By default, only metastore admins have access to `system.query.history`. Admins can grant access:
 ```sql
 GRANT USE CATALOG ON CATALOG system TO `user@example.com`;
 GRANT USE SCHEMA ON SCHEMA system.query TO `user@example.com`;
 GRANT SELECT ON TABLE system.query.history TO `user@example.com`;
 ```
 
-**Query Plan:** Uses `EXPLAIN` directly on SQL you provide - no `system.query.history` access required
+- **Query Plan:** Uses `EXPLAIN` directly on SQL you provide — does NOT require `system.query.history` access
+- **Execution Plan:** Retrieves SQL from query history, then runs EXPLAIN — requires `system.query.history` access
+- The `statement_id` can be found in the Query History UI or SQL warehouse logs
+- `system.query.history` can lag the query actually running by a few minutes — see [Requirements and limitations](#requirements-and-limitations)
 
-### Redshift
+</details>
+
+<details>
+<summary>Redshift</summary>
 
 | Mode | Source | Permissions Required | Retention |
 |------|--------|---------------------|-----------|
 | User-scoped (default) | `sys_query_history` | None (own queries only) | 2-5 days |
 | Account-level | `sys_query_history` | Superuser access | 2-5 days |
 
-**Query Plan:** Uses `stl_explain` system table (available to all users for their own queries)
+- **Query Plan:** Uses `stl_explain` system table (available to all users for their own queries), reached through `stl_query` correlated by transaction id (`xid`) — see [AWS's note on correlating these tables](https://repost.aws/knowledge-center/redshift-query-id-match-tables)
+- `sys_query_history` is preferred over the older `stl_query` for Query History, Query SQL, Execution Plan, and Query Stats
+- System tables retain 2-5 days of history depending on usage, and are pruned aggressively — see [Requirements and limitations](#requirements-and-limitations)
+- Query ID is a bigint (not a UUID like other platforms)
 
-### DuckDB
+</details>
+
+<details>
+<summary>DuckDB</summary>
 
 DuckDB requires query logging to be explicitly enabled:
 ```sql
@@ -327,60 +517,16 @@ CALL enable_logging('QueryLog', storage_path = 'path/to/logs');
 ```
 When you enable logging with the same `storage_path` in a new session, logs from previous sessions become available.
 
-**Note:** `get_query_stats()` for DuckDB will **re-execute the query** using `EXPLAIN ANALYZE` to capture actual execution metrics.
-
-## Platform-Specific Notes
-
-### Snowflake
-
-- **User-scoped (default):** Uses `information_schema.query_history()` - 7 days retention, no latency
-- **Account-level:** Uses `snowflake.account_usage.query_history` - 365 days retention, up to 45 min latency
-- Query history uses `query_history_by_user()` when filtering by user for better performance
-- Query plan uses `get_query_operator_stats()` for detailed execution metrics
-- A query tag (`dbt_query_profiler`) is set to exclude the macro's own queries from results
-- `result_limit` max is 10,000
-
-### BigQuery
-
-- **User-scoped (default):** Uses `INFORMATION_SCHEMA.JOBS_BY_USER` - only current user's jobs
-- **Project-level:** Uses `INFORMATION_SCHEMA.JOBS_BY_PROJECT` - all jobs in project
-- Query plan (EXPLAIN) is not available via SQL (use BigQuery console or API)
-- **Execution Plan:** Returns [Query Insights](https://cloud.google.com/bigquery/docs/query-insights) instead of an operator-level plan — diagnostics include slot contention, high cardinality joins, partition skew, and shuffle quota issues. Returns `null` insights if no performance issues were detected.
-- Region is read from `target.location` in your profile (defaults to 'us' if not set)
-
-### Databricks
-
-- Uses `system.query.history` system table for Query History, Query SQL, Execution Plan, and Query Stats
-- **User-scoped (default):** Filters by `current_user()` - only your own queries
-- **Account-level:** Shows all users' queries (requires same permissions)
-- **Query Plan:** Uses `EXPLAIN` directly on SQL you provide - does NOT require `system.query.history` access
-- **Execution Plan:** Retrieves SQL from query history, then runs EXPLAIN - requires `system.query.history` access
-- The `statement_id` can be found in the Query History UI or SQL warehouse logs
-
-### Redshift
-
-- Uses `sys_query_history` system view (recommended over older `stl_query`)
-- Query plan uses `stl_explain` for execution plan details
-- System tables retain 2-5 days of history depending on usage
-- Query ID is a bigint (not a UUID like other platforms)
-
-### DuckDB
-
-- Requires logging to be enabled with `CALL enable_logging('QueryLog');`
-- Query history is read from `duckdb_logs` view
-- **In-memory logging (default):** Logs are lost when session ends
-- **File-based logging:** Use `CALL enable_logging('QueryLog', storage_path = 'path/to/logs');` to persist logs across sessions
-- Query plan uses `EXPLAIN` (does not re-execute)
-- Supports formats: `text`, `json`, `graphviz`, `html`
-- **Query stats will re-execute the query** via `EXPLAIN ANALYZE` to get actual metrics
+- Query plan uses `EXPLAIN` (does not re-execute) and supports `text`, `json`, `graphviz`, and `html` formats
+- **Query stats will re-execute the query** using `EXPLAIN ANALYZE` to capture actual execution metrics
 - Query ID is the `rowid` from the logs table
+- `total_elapsed_time` is always NULL (`duckdb_logs` has no duration column) — see the DuckDB tiebreak in [Requirements and limitations](#requirements-and-limitations)
+
+</details>
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new adapters
-4. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

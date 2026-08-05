@@ -11,6 +11,11 @@
 {% endmacro %}
 
 
+{% macro duckdb__ensure_history_available() %}
+    {{ dbt_query_profiler.duckdb__ensure_logging_enabled() }}
+{% endmacro %}
+
+
 {% macro duckdb__query_log_lookup(query_id) %}
     {#
         Resolve a query_id handed out by duckdb__get_query_history back to its SQL text.
@@ -42,7 +47,7 @@
 {% endmacro %}
 
 
-{% macro duckdb__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro duckdb__get_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {# DuckDB requires logging to be enabled with: CALL enable_logging('QueryLog'); #}
     {#
         DISTINCT is required: DuckDB logs each statement once per connection, so
@@ -62,16 +67,19 @@
         cast(null as bigint) as total_elapsed_time
     from duckdb_logs
     where type = 'QueryLog'
-        and position('{{ dbt_query_profiler._self_identifier() }}' in message) = 0
+        and not ({{ dbt_query_profiler.contains_text('message', dbt_query_profiler._self_identifier()) }})
     {% if table_name %}
-        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(message)) > 0
+        and {{ dbt_query_profiler.contains_text('lower(message)', table_name | lower) }}
+    {% endif %}
+    {% if node_id %}
+        and {{ dbt_query_profiler.contains_text('message', dbt_query_profiler._node_id_needle(node_id)) }}
     {% endif %}
     order by start_time desc
     limit {{ limit }}
 {% endmacro %}
 
 
-{% macro duckdb__print_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro duckdb__print_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {{ duckdb__ensure_logging_enabled() }}
     {% set query %}
         /* {{ dbt_query_profiler._self_identifier() }} */
@@ -88,7 +96,7 @@
             }
             order by start_time desc
         )::json as result
-        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit) }})
+        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit, node_id=node_id) }})
     {% endset %}
 
     {% set results = run_query(query) %}

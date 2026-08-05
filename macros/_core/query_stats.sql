@@ -1,5 +1,6 @@
-{% macro get_query_stats(query_id, result_limit=10000) %}
-    {{ return(adapter.dispatch('get_query_stats', 'dbt_query_profiler')(query_id=query_id, result_limit=result_limit)) }}
+{% macro get_query_stats(query_id=none, result_limit=10000, model_name=none, node_id=none, num_candidates=10) %}
+    {%- set resolved = dbt_query_profiler.resolve_query_id(query_id=query_id, model_name=model_name, node_id=node_id, num_candidates=num_candidates, result_limit=result_limit) -%}
+    {{ return(adapter.dispatch('get_query_stats', 'dbt_query_profiler')(query_id=resolved, result_limit=result_limit)) }}
 {% endmacro %}
 
 
@@ -8,8 +9,9 @@
 {% endmacro %}
 
 
-{% macro print_query_stats(query_id, format='json', result_limit=10000) %}
-    {{ return(adapter.dispatch('print_query_stats', 'dbt_query_profiler')(query_id=query_id, format=format, result_limit=result_limit)) }}
+{% macro print_query_stats(query_id=none, format='json', result_limit=10000, model_name=none, node_id=none, num_candidates=10) %}
+    {%- set resolved = dbt_query_profiler.resolve_query_id(query_id=query_id, model_name=model_name, node_id=node_id, num_candidates=num_candidates, result_limit=result_limit) -%}
+    {{ return(adapter.dispatch('print_query_stats', 'dbt_query_profiler')(query_id=resolved, format=format, result_limit=result_limit)) }}
 {% endmacro %}
 
 

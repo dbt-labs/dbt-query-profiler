@@ -1,4 +1,4 @@
-{% macro redshift__get_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro redshift__get_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {%- set custom_source = var('redshift_query_history_source', none) -%}
     {%- set source_table = custom_source if custom_source else 'sys_query_history' -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
@@ -31,12 +31,15 @@
        "function pg_catalog.date_add(..., timestamp with time zone) does not exist". #}
     where start_time > dateadd(day, -7, getdate())
         and status = 'success'
-        and position('{{ dbt_query_profiler._self_identifier() }}' in query_text) = 0
+        and not ({{ dbt_query_profiler.contains_text('query_text', dbt_query_profiler._self_identifier()) }})
     {% if effective_user %}
         and lower(username) = lower('{{ dbt_query_profiler._escape_literal(effective_user) }}')
     {% endif %}
     {% if table_name %}
-        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(query_text)) > 0
+        and {{ dbt_query_profiler.contains_text('lower(query_text)', table_name | lower) }}
+    {% endif %}
+    {% if node_id %}
+        and {{ dbt_query_profiler.contains_text('query_text', dbt_query_profiler._node_id_needle(node_id)) }}
     {% endif %}
     {% if query_type %}
         and query_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'
@@ -46,7 +49,7 @@
 {% endmacro %}
 
 
-{% macro redshift__print_query_history(table_name, user_name, query_type, limit, result_limit) %}
+{% macro redshift__print_query_history(table_name, user_name, query_type, limit, result_limit, node_id=none) %}
     {% set query %}
         /* {{ dbt_query_profiler._self_identifier() }} */
         select json_serialize(
@@ -66,7 +69,7 @@
                 ), ','
             ) within group (order by start_time desc) || ']')
         ) as result
-        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit) }})
+        from ({{ dbt_query_profiler.get_query_history(table_name=table_name, user_name=user_name, query_type=query_type, limit=limit, result_limit=result_limit, node_id=node_id) }})
     {% endset %}
 
     {% set results = run_query(query) %}

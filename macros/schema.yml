@@ -26,6 +26,12 @@ macros:
       - name: result_limit
         type: integer
         description: Number of queries to look back through. Default 100, max 10000 (Snowflake).
+      - name: node_id
+        type: string
+        description: "Filter by dbt node id (e.g. 'model.my_project.my_model'), matched exactly against the node_id embedded in dbt's default query comment. Mutually exclusive with model_name."
+      - name: model_name
+        type: string
+        description: "Filter by dbt model name instead of node_id. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with node_id."
 
   - name: print_query_history
     description: |
@@ -49,6 +55,12 @@ macros:
       - name: result_limit
         type: integer
         description: Number of queries to look back through. Default 100, max 10000 (Snowflake).
+      - name: node_id
+        type: string
+        description: "Filter by dbt node id (e.g. 'model.my_project.my_model'), matched exactly against the node_id embedded in dbt's default query comment. Mutually exclusive with model_name."
+      - name: model_name
+        type: string
+        description: "Filter by dbt model name instead of node_id. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with node_id."
 
   - name: get_query_sql
     description: |
@@ -61,7 +73,16 @@ macros:
         description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB '<context_id>:<epoch_us>' as returned by get_query_history)
       - name: result_limit
         type: integer
-        description: "Number of queries to look back through. Accepted by all adapters, but only affects Snowflake — the others look the query up by ID directly. Default: 1000, max: 10000."
+        description: "Number of queries to look back through. Accepted by all adapters, but only affects Snowflake — the others look the query up by ID directly. Also used as the lookback window when resolving model_name/node_id to a query_id. Default: 1000, max: 10000."
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: print_query_sql
     description: |
@@ -74,7 +95,16 @@ macros:
         description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, Redshift query_id, or DuckDB '<context_id>:<epoch_us>' as returned by get_query_history)
       - name: result_limit
         type: integer
-        description: "Number of queries to look back through. Accepted by all adapters, but only affects Snowflake — the others look the query up by ID directly. Default: 1000, max: 10000."
+        description: "Number of queries to look back through. Accepted by all adapters, but only affects Snowflake — the others look the query up by ID directly. Also used as the lookback window when resolving model_name/node_id to a query_id. Default: 1000, max: 10000."
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: get_query_plan
     description: |
@@ -140,6 +170,18 @@ macros:
       - name: query_id
         type: string
         description: The query ID of a previously executed query
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+      - name: result_limit
+        type: integer
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
 
   - name: print_execution_plan
     description: |
@@ -159,6 +201,18 @@ macros:
           - 'json' (default): Full details as JSON
           - 'text': Compact terminal-friendly output
           - 'markdown': Table format (Snowflake only)
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+      - name: result_limit
+        type: integer
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
 
   - name: get_execution_plan_summary
     description: |
@@ -169,6 +223,18 @@ macros:
       - name: query_id
         type: string
         description: The query ID of a previously executed query
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+      - name: result_limit
+        type: integer
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
 
   - name: get_query_stats
     description: |
@@ -197,7 +263,16 @@ macros:
         description: The query ID (Snowflake query_id, BigQuery job_id, Databricks statement_id, or Redshift query_id)
       - name: result_limit
         type: integer
-        description: Number of queries to look back through. Default 10000, max 10000 (Snowflake).
+        description: "Number of queries to look back through. Default 10000, max 10000 (Snowflake). Also used as the lookback window when resolving model_name/node_id to a query_id."
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
 
   - name: print_query_stats
     description: |
@@ -218,4 +293,13 @@ macros:
           - 'text': Compact terminal-friendly output
       - name: result_limit
         type: integer
-        description: Number of queries to look back through. Default 10000, max 10000 (Snowflake).
+        description: "Number of queries to look back through. Default 10000, max 10000 (Snowflake). Also used as the lookback window when resolving model_name/node_id to a query_id."
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
