@@ -72,13 +72,13 @@
     {% endif %}
     where nvl(query_tag, '') != '{{ dbt_query_profiler._self_identifier() }}'
     {% endif %}
-        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._self_identifier()) }}' in query_text) = 0
+        and not ({{ dbt_query_profiler.contains_text('query_text', dbt_query_profiler._self_identifier()) }})
         and execution_status = 'SUCCESS'
     {% if table_name %}
-        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(query_text)) > 0
+        and {{ dbt_query_profiler.contains_text('lower(query_text)', table_name | lower) }}
     {% endif %}
     {% if node_id %}
-        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._node_id_needle(node_id)) }}' in query_text) > 0
+        and {{ dbt_query_profiler.contains_text('query_text', dbt_query_profiler._node_id_needle(node_id)) }}
     {% endif %}
     {% if query_type %}
         and query_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'

@@ -18,17 +18,17 @@
     from {{ source_table }}
     where start_time > dateadd(day, -7, current_timestamp())
         and execution_status = 'FINISHED'
-        and position('{{ dbt_query_profiler._self_identifier() }}' in statement_text) = 0
+        and not ({{ dbt_query_profiler.contains_text('statement_text', dbt_query_profiler._self_identifier()) }})
     {% if effective_user == 'current_user()' %}
         and executed_by = current_user()
     {% elif effective_user %}
         and lower(executed_by) = lower('{{ dbt_query_profiler._escape_literal(effective_user) }}')
     {% endif %}
     {% if table_name %}
-        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(statement_text)) > 0
+        and {{ dbt_query_profiler.contains_text('lower(statement_text)', table_name | lower) }}
     {% endif %}
     {% if node_id %}
-        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._node_id_needle(node_id)) }}' in statement_text) > 0
+        and {{ dbt_query_profiler.contains_text('statement_text', dbt_query_profiler._node_id_needle(node_id)) }}
     {% endif %}
     {% if query_type %}
         and statement_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'

@@ -13,24 +13,38 @@
 {% macro _escape_literal(value) %}{{ (value | string).replace("'", "''") }}{% endmacro %}
 
 {#
-    The node id as it appears in dbt's query comment, keyed: `"node_id": "<node_id>"`.
+    The node id as dbt's query comment writes it, including the key: `"node_id": "<id>"`.
 
-    Anchoring on the surrounding double quotes alone (the previous form of this macro)
-    cannot tell "the query comment names this node" from "the query text happens to
-    mention the id in double quotes" - and because statement selection ranks candidates
-    by duration, a slow query that merely *mentions* a node id can outrank that node's own
-    (usually much faster) build, which is a silent wrong answer, not a loud one. Confirmed
-    live on Redshift: a 5.7s hand-written diagnostic query that only mentioned a node id
-    outranked the node's actual 227ms CTAS until the key was added to the needle.
-
-    Depending on dbt's `": "` key/value separator is a real risk - if dbt ever changes its
-    query_comment JSON formatting, this breaks. It's the preferable risk of the two:
-    a formatting change fails resolution loudly (on all five adapters at once, in the
-    regression tests), where the bug this replaces failed silently (profiling the wrong
-    statement with no error). The `": "` spacing was observed consistent across all five
-    supported adapters, on both dbt-core and dbt-fusion.
+    Limitation: this depends on dbt's `": "` key/value separator. Matching the bare quoted
+    id instead would avoid that, but then any query merely *mentioning* an id matches, and
+    since selection ranks by duration a slow query about a model can outrank the model's
+    own build. Requiring the key trades a silent wrong answer for a loud one - if dbt's
+    query_comment format ever changes, resolution fails visibly in the tests.
 #}
 {% macro _node_id_needle(node_id) %}{{ return('"node_id": "' ~ node_id ~ '"') }}{% endmacro %}
+
+
+{#
+    A "column contains this literal text" predicate, as SQL.
+
+    Exists because the adapters disagree on the spelling: BigQuery has no
+    `POSITION(x IN y)` and needs `STRPOS(y, x)`. Every history filter needs this, so
+    without a helper each filter has to remember the BigQuery exception separately.
+    The needle is escaped here; callers pass it raw.
+#}
+{% macro contains_text(column, needle) %}
+    {{ return(adapter.dispatch('contains_text', 'dbt_query_profiler')(column=column, needle=needle)) }}
+{% endmacro %}
+
+
+{% macro default__contains_text(column, needle) %}
+    {{ return("position('" ~ dbt_query_profiler._escape_literal(needle) ~ "' in " ~ column ~ ") > 0") }}
+{% endmacro %}
+
+
+{% macro bigquery__contains_text(column, needle) %}
+    {{ return("strpos(" ~ column ~ ", '" ~ dbt_query_profiler._escape_literal(needle) ~ "') > 0") }}
+{% endmacro %}
 
 {% macro get_query_history(table_name=none, user_name=none, query_type=none, limit=1, result_limit=100, node_id=none, model_name=none) %}
     {%- set resolved_node_id = dbt_query_profiler._resolve_history_node_id(model_name, node_id) -%}

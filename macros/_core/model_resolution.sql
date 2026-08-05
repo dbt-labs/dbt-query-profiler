@@ -8,10 +8,15 @@
 #}
 {% macro resolve_node_id(model_name) %}
     {%- if graph is not defined or not graph or not graph.get('nodes') -%}
-        {#- graph is unavailable in some contexts; fall back rather than fail outright -#}
-        {%- set fallback = 'model.' ~ project_name ~ '.' ~ model_name -%}
-        {{ log("dbt_query_profiler: graph unavailable, assuming node id '" ~ fallback ~ "'. Pass node_id= explicitly if this is wrong.", info=True) }}
-        {{ return(fallback) }}
+        {#- The graph is empty at parse time, but callers return before reaching this, so
+            arriving here means it is missing on the execute pass. Guessing
+            "model.<project>.<name>" would be wrong for any model in an installed package -
+            the case this macro exists to handle - so fail rather than resolve to a plausible
+            lie. -#}
+        {{ exceptions.raise_compiler_error(
+            "Cannot resolve model_name '" ~ model_name ~ "': the dbt graph is unavailable. "
+            ~ "Pass node_id= directly (e.g. node_id: model." ~ project_name ~ "." ~ model_name ~ ")."
+        ) }}
     {%- endif -%}
 
     {%- set matches = [] -%}
@@ -67,7 +72,9 @@
     {%- if node_id is not none -%}
         {{ return(node_id) }}
     {%- elif model_name is not none -%}
-        {{ return(dbt_query_profiler.resolve_node_id(model_name)) }}
+        {#- graph is empty at parse time, and the SQL built here isn't executed then
+            either, so resolving would only produce a value nobody uses. -#}
+        {{ return(dbt_query_profiler.resolve_node_id(model_name) if execute else none) }}
     {%- else -%}
         {{ return(none) }}
     {%- endif -%}
@@ -141,11 +148,13 @@
         {{ return(query_id) }}
     {%- endif -%}
 
-    {%- set resolved_node_id = node_id if node_id is not none else dbt_query_profiler.resolve_node_id(model_name) -%}
-
+    {#- Nothing below can work at parse time: run_query is a no-op then. Return before
+        resolving, so parse doesn't pay for a lookup whose result is discarded. -#}
     {%- if not execute -%}
         {{ return(none) }}
     {%- endif -%}
+
+    {%- set resolved_node_id = node_id if node_id is not none else dbt_query_profiler.resolve_node_id(model_name) -%}
 
     {% do dbt_query_profiler.ensure_history_available() %}
     {%- set results = run_query(dbt_query_profiler._node_query_id_sql(resolved_node_id, num_candidates, result_limit)) -%}

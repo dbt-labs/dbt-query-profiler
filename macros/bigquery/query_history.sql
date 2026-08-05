@@ -26,15 +26,15 @@
     where creation_time > timestamp_sub(current_timestamp(), interval 7 day)
         and job_type = 'QUERY'
         and state = 'DONE'
-        and strpos(query, '{{ dbt_query_profiler._self_identifier() }}') = 0
+        and not ({{ dbt_query_profiler.contains_text('query', dbt_query_profiler._self_identifier()) }})
     {% if use_account_level and effective_user %}
         and lower(user_email) = lower('{{ dbt_query_profiler._escape_literal(effective_user) }}')
     {% endif %}
     {% if table_name %}
-        and strpos(lower(query), lower('{{ dbt_query_profiler._escape_literal(table_name) }}')) > 0
+        and {{ dbt_query_profiler.contains_text('lower(query)', table_name | lower) }}
     {% endif %}
     {% if node_id %}
-        and strpos(query, '{{ dbt_query_profiler._escape_literal(dbt_query_profiler._node_id_needle(node_id)) }}') > 0
+        and {{ dbt_query_profiler.contains_text('query', dbt_query_profiler._node_id_needle(node_id)) }}
     {% endif %}
     {% if query_type %}
         and statement_type = '{{ dbt_query_profiler._escape_literal(query_type | upper) }}'

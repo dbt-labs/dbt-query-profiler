@@ -67,12 +67,12 @@
         cast(null as bigint) as total_elapsed_time
     from duckdb_logs
     where type = 'QueryLog'
-        and position('{{ dbt_query_profiler._self_identifier() }}' in message) = 0
+        and not ({{ dbt_query_profiler.contains_text('message', dbt_query_profiler._self_identifier()) }})
     {% if table_name %}
-        and position(lower('{{ dbt_query_profiler._escape_literal(table_name) }}') in lower(message)) > 0
+        and {{ dbt_query_profiler.contains_text('lower(message)', table_name | lower) }}
     {% endif %}
     {% if node_id %}
-        and position('{{ dbt_query_profiler._escape_literal(dbt_query_profiler._node_id_needle(node_id)) }}' in message) > 0
+        and {{ dbt_query_profiler.contains_text('message', dbt_query_profiler._node_id_needle(node_id)) }}
     {% endif %}
     order by start_time desc
     limit {{ limit }}
