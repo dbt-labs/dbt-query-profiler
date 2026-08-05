@@ -14,6 +14,7 @@ A dbt package for querying and analyzing query history and execution plans acros
 - [Example: profile the slowest models from a run](#example-profile-the-slowest-models-from-a-run)
 - [Macros reference](#macros-reference)
 - [Adapter notes](#adapter-notes)
+- [Support](#support)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -524,9 +525,15 @@ When you enable logging with the same `storage_path` in a new session, logs from
 
 </details>
 
+## Support
+
+Provided as-is, with no SLA. Maintenance is best-effort by the dbt Labs DX team.
+
+Bug reports and feature requests are welcome as [issues](https://github.com/dbt-labs/dbt-query-profiler/issues); please include your adapter and dbt version. For a security issue, follow [SECURITY.md](SECURITY.md) rather than opening an issue.
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
