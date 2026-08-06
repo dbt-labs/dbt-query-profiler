@@ -14,6 +14,9 @@ env:
   PYTHON_VERSION: "3.11"
   DBT_PROFILES_DIR: ./integration_tests/profiles
 
+permissions:
+  contents: read
+
 jobs:
   # Tier 1: Verify macros compile for all adapters
   compile:
@@ -37,10 +40,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -54,6 +57,30 @@ jobs:
 
       - name: Run compilation test
         run: tox -e compile_${{ matrix.adapter }}
+        # `dbt parse` renders profiles.yml, whose env_var() calls have no defaults, so
+        # it fails on a missing variable before it ever reaches the macros. Parsing
+        # never opens a connection, so placeholders are enough - and keeping them
+        # obviously fake avoids any suggestion that this tier talks to a warehouse.
+        # Real credentials live in integration.yml, which is not triggered by pull_request.
+        env:
+          SNOWFLAKE_ACCOUNT: not-a-real-account
+          SNOWFLAKE_USER: ci
+          DBT_ENV_SECRET_SNOWFLAKE_PASS: ci
+          SNOWFLAKE_ROLE: ci
+          SNOWFLAKE_DATABASE: ci
+          SNOWFLAKE_WAREHOUSE: ci
+          BIGQUERY_PROJECT: not-a-real-project
+          BIGQUERY_KEYFILE_JSON: "{}"
+          BIGQUERY_LOCATION: US
+          DATABRICKS_HOST: not-a-real-host
+          DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/ci
+          DBT_ENV_SECRET_DATABRICKS_TOKEN: ci
+          DATABRICKS_CATALOG: ci
+          REDSHIFT_HOST: not-a-real-host
+          REDSHIFT_USER: ci
+          DBT_ENV_SECRET_REDSHIFT_PASS: ci
+          REDSHIFT_DATABASE: ci
+          REDSHIFT_PORT: "5439"
 
   # Tier 2: Full integration tests with DuckDB
   integration-duckdb:
@@ -63,10 +90,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
