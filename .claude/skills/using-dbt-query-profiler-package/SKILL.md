@@ -88,6 +88,18 @@ dbt run-operation dbt_query_profiler.print_execution_plan \
 # Markdown (Snowflake only)
 dbt run-operation dbt_query_profiler.print_execution_plan \
   --args '{query_id: "01c20db1-...", format: markdown}' --quiet
+
+# Wide plan: only operators at/above 5% of total time, sorted by time% desc (Snowflake only)
+dbt run-operation dbt_query_profiler.print_execution_plan \
+  --args '{query_id: "01c20db1-...", format: text, min_pct: 5}' --quiet
+```
+
+For a condensed view that adds Snowflake spill-to-disk bytes (the evidence for a
+warehouse-sizing decision), use `print_execution_plan_summary` instead - same args,
+minus `min_pct`/`top_n`:
+```bash
+dbt run-operation dbt_query_profiler.print_execution_plan_summary \
+  --args '{query_id: "01c20db1-...", format: text}' --quiet
 ```
 
 ### Get Query Plan (EXPLAIN-based for SQL)
@@ -196,6 +208,7 @@ dbt run-operation dbt_query_profiler.print_execution_plan \
 | `result_limit` | Lookback depth for `print_query_history` (all adapters) and `print_query_sql` (Snowflake only) | 100 (history), 1000 (sql) |
 | `query_id` | Specific query to analyze | Required for sql/plan/stats |
 | `format` | Output: json, text, markdown (varies by adapter) | json |
+| `min_pct` / `top_n` | `print_execution_plan` only, Snowflake only: filter to operators at/above a time% threshold and/or cap to the top N by time% | None (all operators) |
 
 ## Platform-Specific Notes
 
@@ -231,14 +244,53 @@ dbt run-operation dbt_query_profiler.print_execution_plan \
 
 ## Troubleshooting
 
-**"No query found"**
+**"No query found" / "Query not found"**
 - Query may be outside lookback window (increase `result_limit`)
-- Wrong user context (try `user_name: ""` with elevated permissions)
 - Query not yet in history (some warehouses have latency)
+- **Wrong user context** - the query belongs to a different user, e.g. a dbt Cloud job's
+  service user (`DBT_CLOUD_USER`). This is the common case when profiling *production job
+  runs* rather than your own dev session. Fix depends on which macro:
+  - `print_query_history`: pass `user_name: ""` (requires elevated permissions), or
+  - `print_query_sql`, `print_query_stats` (Snowflake): pass
+    `--vars '{use_account_level_history: true}'` - these look the query up through the same
+    account-level history view as `print_query_history`.
+  - `print_execution_plan` / `print_execution_plan_summary` (Snowflake): once you already
+    have the `query_id`, `use_account_level_history` does **not** apply - these call
+    `GET_QUERY_OPERATOR_STATS()` directly, which is privilege-gated, not view-gated. If it
+    can't find another user's query, the fix is `MONITOR` privilege on the query's
+    warehouse (or `ACCOUNTADMIN`), not the `use_account_level_history` var.
+
+**One-off `--vars` override**
+
+`use_account_level_history` is normally set once in `dbt_project.yml`, but for a single
+historical-query lookup pass it inline instead of changing project config:
+```bash
+dbt run-operation dbt_query_profiler.print_query_stats \
+  --args '{query_id: "..."}' --vars '{use_account_level_history: true}' --quiet
+```
+
+**Identifying an unknown query_id's model**
+
+Given a `query_id` with no known origin (e.g. pulled from a warehouse UI or a job's
+history), run `print_query_sql` and read the trailing dbt query-comment JSON in the
+returned text - it carries `node_id`, and for dbt Cloud job runs also `dbt_cloud_job_id`,
+`dbt_cloud_run_id`, and `invocation_id`:
+```bash
+dbt run-operation dbt_query_profiler.print_query_sql --args '{query_id: "..."}' --quiet
+```
 
 **Query plan not available**
 - BigQuery doesn't expose plans
 - Some query types don't generate plans
+
+**Wide/large execution plans**
+- Union-heavy staging models can produce 100+ operators, mostly at `time: 0%` - reading
+  top to bottom wastes time on noise. On Snowflake, `print_execution_plan` and
+  `print_execution_plan_summary` take `min_pct`/`top_n` to filter/cap by time% instead:
+  ```bash
+  dbt run-operation dbt_query_profiler.print_execution_plan \
+    --args '{query_id: "...", format: text, min_pct: 5}' --quiet
+  ```
 
 **Permission denied**
 - Check warehouse-specific permissions in README
