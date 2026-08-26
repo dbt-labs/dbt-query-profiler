@@ -147,6 +147,17 @@ else
         "$DBT_BIN run-operation print_execution_plan --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
         "."  # Just check it returns something
 
+    # Test print_execution_plan_summary
+    run_test "print_execution_plan_summary" \
+        "$DBT_BIN run-operation print_execution_plan_summary --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \
+        "."  # Just check it returns something
+
+    # Test print_execution_plan with min_pct/top_n (Snowflake-only filtering; other
+    # adapters accept and ignore both args - this just checks nothing breaks there)
+    run_test "print_execution_plan (min_pct/top_n)" \
+        "$DBT_BIN run-operation print_execution_plan --args '{query_id: \"$QUERY_ID\", min_pct: 0, top_n: 5}' --target $TARGET" \
+        "."  # Just check it returns something
+
     # Test print_query_stats
     run_test "print_query_stats (json)" \
         "$DBT_BIN run-operation print_query_stats --args '{query_id: \"$QUERY_ID\"}' --target $TARGET" \

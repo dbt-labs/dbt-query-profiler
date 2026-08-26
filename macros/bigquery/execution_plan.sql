@@ -21,7 +21,8 @@
 {% endmacro %}
 
 
-{% macro bigquery__print_execution_plan(query_id, format) %}
+{% macro bigquery__print_execution_plan(query_id, format, min_pct=none, top_n=none) %}
+    {# min_pct/top_n are Snowflake-only filters (see snowflake__print_execution_plan) - accepted and ignored here so the shared dispatch call works on every adapter. #}
     {%- set region = target.location if target.location else 'us' -%}
     {%- set custom_source = var('bigquery_query_history_source', none) -%}
     {%- set use_account_level = var('use_account_level_history', false) -%}
@@ -57,4 +58,10 @@
 {% macro bigquery__get_execution_plan_summary(query_id) %}
     {# Returns the same Query Insights as get_execution_plan — BigQuery has no separate summary concept. #}
     {{ return(dbt_query_profiler.bigquery__get_execution_plan(query_id=query_id)) }}
+{% endmacro %}
+
+
+{% macro bigquery__print_execution_plan_summary(query_id, format) %}
+    {# Same reasoning as get_execution_plan_summary above - no distinct summary to print. #}
+    {{ return(dbt_query_profiler.bigquery__print_execution_plan(query_id=query_id, format=format)) }}
 {% endmacro %}

@@ -39,7 +39,8 @@
 {% endmacro %}
 
 
-{% macro redshift__print_execution_plan(query_id, format) %}
+{% macro redshift__print_execution_plan(query_id, format, min_pct=none, top_n=none) %}
+    {# min_pct/top_n are Snowflake-only filters (see snowflake__print_execution_plan) - accepted and ignored here so the shared dispatch call works on every adapter. #}
 
     {% if format == 'text' %}
         {% set query %}
@@ -106,4 +107,10 @@
 {% macro redshift__get_execution_plan_summary(query_id) %}
     {# Redshift has no separate summary concept - stl_explain is already node-level. #}
     {{ return(dbt_query_profiler.redshift__get_execution_plan(query_id=query_id)) }}
+{% endmacro %}
+
+
+{% macro redshift__print_execution_plan_summary(query_id, format) %}
+    {# Same reasoning as get_execution_plan_summary above - no distinct summary to print. #}
+    {{ return(dbt_query_profiler.redshift__print_execution_plan(query_id=query_id, format=format)) }}
 {% endmacro %}

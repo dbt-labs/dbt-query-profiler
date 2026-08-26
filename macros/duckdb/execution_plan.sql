@@ -24,7 +24,8 @@
 {% endmacro %}
 
 
-{% macro duckdb__print_execution_plan(query_id, format) %}
+{% macro duckdb__print_execution_plan(query_id, format, min_pct=none, top_n=none) %}
+    {# min_pct/top_n are Snowflake-only filters (see snowflake__print_execution_plan) - accepted and ignored here so the shared dispatch call works on every adapter. #}
     {{ duckdb__ensure_logging_enabled() }}
     {# First, get the query text from logs #}
     {% set sql_query %}
@@ -88,4 +89,10 @@
     {% else %}
         {{ exceptions.raise_compiler_error("Query not found with query_id: " ~ query_id ~ ". Ensure logging is enabled with: CALL enable_logging('QueryLog');") }}
     {% endif %}
+{% endmacro %}
+
+
+{% macro duckdb__print_execution_plan_summary(query_id, format) %}
+    {# get_execution_plan_summary above is identical to get_execution_plan (plain EXPLAIN, no ANALYZE) - nothing distinct to print. #}
+    {{ return(dbt_query_profiler.duckdb__print_execution_plan(query_id=query_id, format=format)) }}
 {% endmacro %}
