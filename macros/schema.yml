@@ -213,6 +213,12 @@ macros:
       - name: result_limit
         type: integer
         description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
+      - name: min_pct
+        type: float
+        description: "Snowflake only. Only include operators whose time% is at or above this threshold (e.g. 5 for 5%). Accepted by all adapters but only Snowflake applies it - useful for cutting a wide, union-heavy plan (100+ operators, most at 0% time) down to the ones worth reading."
+      - name: top_n
+        type: integer
+        description: "Snowflake only. Only include the top N operators by time%. Accepted by all adapters but only Snowflake applies it. Combine with min_pct to both threshold and cap. When either is set, output is sorted by time% descending instead of the plan's natural operator_id order."
 
   - name: get_execution_plan_summary
     description: |
@@ -223,6 +229,44 @@ macros:
       - name: query_id
         type: string
         description: The query ID of a previously executed query
+      - name: model_name
+        type: string
+        description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."
+      - name: node_id
+        type: string
+        description: "Profile by dbt node id (e.g. model.my_project.my_model), skipping graph lookup. Useful when you already have one, e.g. from run_results.json. Mutually exclusive with query_id and model_name."
+      - name: num_candidates
+        type: integer
+        description: "How many of the model's most recent statements to consider before picking the slowest. Default 10. A run can emit several statements (an incremental does a temp build then a merge); dbt's query comment has no invocation_id, so the run boundary is not recoverable and this is an approximation."
+      - name: result_limit
+        type: integer
+        description: "How far back through history to look when resolving model_name/node_id to a query_id. Accepted by all adapters, but only affects Snowflake - mirrors get_query_history's result_limit. Default 1000, max 10000 (Snowflake)."
+
+  - name: print_execution_plan_summary
+    description: |
+      Retrieves and prints the summarized execution plan.
+
+      **Supported adapters:** Snowflake, Databricks, Redshift, DuckDB
+
+      On Snowflake, this is the one place spilling info (bytes spilled to local/remote
+      disk - the evidence for a warehouse-sizing decision) is surfaced outside the raw
+      per-operator JSON blob in `print_execution_plan`'s `json` format. On the other
+      adapters, `get_execution_plan_summary` has no metrics distinct from
+      `get_execution_plan`, so this just prints the same plan as `print_execution_plan`
+      (Databricks uses `EXPLAIN COST` instead of `EXPLAIN EXTENDED`/`FORMATTED`).
+
+      **Usage:** `dbt run-operation print_execution_plan_summary --args '{query_id: "...", format: "text"}'`
+    arguments:
+      - name: query_id
+        type: string
+        description: The query ID of a previously executed query
+      - name: format
+        type: string
+        description: |
+          Output format:
+          - 'json' (default): Full details as JSON
+          - 'text': Compact terminal-friendly output
+          - 'markdown': Table format (Snowflake only)
       - name: model_name
         type: string
         description: "Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with query_id and node_id."

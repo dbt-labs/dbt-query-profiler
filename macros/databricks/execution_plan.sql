@@ -28,7 +28,8 @@
 {% endmacro %}
 
 
-{% macro databricks__print_execution_plan(query_id, format) %}
+{% macro databricks__print_execution_plan(query_id, format, min_pct=none, top_n=none) %}
+    {# min_pct/top_n are Snowflake-only filters (see snowflake__print_execution_plan) - accepted and ignored here so the shared dispatch call works on every adapter. #}
     {%- set custom_source = var('databricks_query_history_source', none) -%}
     {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
     {# First, get the query text from history #}
@@ -83,5 +84,40 @@
         select cast(null as string) as plan limit 0
     {% else %}
         {{ exceptions.raise_compiler_error("Query not found with statement_id: " ~ query_id) }}
+    {% endif %}
+{% endmacro %}
+
+
+{% macro databricks__print_execution_plan_summary(query_id, format) %}
+    {%- set custom_source = var('databricks_query_history_source', none) -%}
+    {%- set source_table = custom_source if custom_source else 'system.query.history' -%}
+    {# First, get the query text from history #}
+    {% set sql_query %}
+        select statement_text
+        from {{ source_table }}
+        where statement_id = '{{ query_id }}'
+    {% endset %}
+
+    {% set sql_result = run_query(sql_query) %}
+
+    {% if execute and sql_result and sql_result.rows and sql_result.rows[0][0] %}
+        {%- set original_sql = sql_result.rows[0][0] -%}
+
+        {# EXPLAIN COST, not extended/formatted - see get_execution_plan_summary above. #}
+        {% set explain_query %}
+            explain cost {{ original_sql }}
+        {% endset %}
+
+        {% set results = run_query(explain_query) %}
+
+        {% if results and results.rows %}
+            {% for row in results.rows %}
+                {{ print(row[0]) }}
+            {% endfor %}
+        {% else %}
+            {{ print("No execution plan found") }}
+        {% endif %}
+    {% else %}
+        {{ print("Query not found with statement_id: " ~ query_id) }}
     {% endif %}
 {% endmacro %}

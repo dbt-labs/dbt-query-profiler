@@ -204,6 +204,31 @@ Example text output (Snowflake):
 
 **Note:** This retrieves actual execution statistics from the query history. Requires query history access.
 
+**Wide plans (Snowflake only):** union-heavy staging models can produce 100+ operators, most sitting at `time: 0%`. Use `min_pct`/`top_n` to cut the noise instead of reading top to bottom - either arg switches the output to sort by time% descending:
+```bash
+# Only operators at or above 5% of total time
+dbt run-operation print_execution_plan --args '{query_id: "01c20db1-...", format: text, min_pct: 5}'
+
+# Only the 5 biggest contributors
+dbt run-operation print_execution_plan --args '{query_id: "01c20db1-...", format: text, top_n: 5}'
+```
+
+### Execution plan summary (Snowflake: with spilling info)
+
+`print_execution_plan_summary` is a condensed view of the same plan. On Snowflake it adds the two spill-to-disk byte counts (`bytes_spilled_local_storage`, `bytes_spilled_remote_storage`) - the evidence that a warehouse was memory-constrained for a query, and otherwise only visible buried inside `print_execution_plan`'s `json` format's raw `operator_statistics` blob. On the other supported adapters `get_execution_plan_summary` has no metrics distinct from the full plan, so this prints the same thing as `print_execution_plan`.
+
+```bash
+dbt run-operation print_execution_plan_summary --args '{query_id: "01c20db1-..."}'
+
+dbt run-operation print_execution_plan_summary --args '{query_id: "01c20db1-...", format: text}'
+```
+
+Example text output (Snowflake):
+```
+[0] CREATE TABLE  (in: -, out: -, time: 100%, spill_local: -, spill_remote: -)
+[1] CreateTableAsSelect  (in: 128, out: 0, time: 33.3%, spill_local: 4194304, spill_remote: -)
+```
+
 ### Query stats
 
 Get execution statistics for a query:
@@ -399,6 +424,7 @@ The second entry resolved to a statement from 11:31 while the build ran at 16:13
 | `get_execution_plan(query_id)` | Returns actual execution statistics for a query |
 | `print_execution_plan(query_id)` | Prints execution plan in json/text/markdown format |
 | `get_execution_plan_summary(query_id)` | Returns summarized execution metrics |
+| `print_execution_plan_summary(query_id)` | Prints the summary - on Snowflake, includes spill-to-disk bytes |
 
 **Arguments:**
 - `query_id` (string): The query ID from query history
@@ -406,6 +432,7 @@ The second entry resolved to a statement from 11:31 while the build ran at 16:13
 - `model_name` (string): Profile a dbt model by name instead of a query ID. Resolved to a node id via the dbt graph, then matched against dbt's query comment. Mutually exclusive with `query_id` and `node_id`.
 - `node_id` (string): Profile by dbt node id (e.g. `model.my_project.my_model`), skipping graph lookup. Useful when you already have one, e.g. from `run_results.json`. Mutually exclusive with `query_id` and `model_name`.
 - `num_candidates` (int): Number of recent statements for the resolved node to consider when picking which one to profile (default: 10)
+- `min_pct` / `top_n` (`print_execution_plan` only, Snowflake only): filter to operators at or above a time% threshold, and/or cap to the top N by time%. Accepted by all adapters but only applied on Snowflake.
 
 ### Query stats
 
