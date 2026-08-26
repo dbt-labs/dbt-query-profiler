@@ -11,6 +11,49 @@
 {% endmacro %}
 
 
+{#
+    Shared expression fragments, so the semi-structured paths they read exist
+    in exactly one place instead of being retyped in every branch that needs
+    them. A typo in one of these would silently read as NULL forever - the
+    print macros below already nvl() every column to '-', so a broken path
+    looks identical to "nothing to report" rather than erroring.
+#}
+{% macro snowflake__overall_pct_expr() %}
+    {{ return('execution_time_breakdown:"overall_percentage"::float') }}
+{% endmacro %}
+
+
+{% macro snowflake__spill_local_expr() %}
+    {{ return('operator_statistics:"spilling":"bytes_spilled_local_storage"') }}
+{% endmacro %}
+
+
+{% macro snowflake__spill_remote_expr() %}
+    {{ return('operator_statistics:"spilling":"bytes_spilled_remote_storage"') }}
+{% endmacro %}
+
+
+{#
+    Shared min_pct/top_n filter fragments for snowflake__print_execution_plan.
+    Split into WHERE and ORDER BY/LIMIT because the json format's non-top_n
+    branch only needs the WHERE half - its ordering comes from array_agg's own
+    "within group (order by ...)", not a query-level ORDER BY.
+#}
+{% macro snowflake__execution_plan_where_clause(pct_expr, min_pct) %}
+    {%- if min_pct is not none %}
+    where nvl({{ pct_expr }} * 100, 0) >= {{ min_pct }}
+    {%- endif %}
+{% endmacro %}
+
+
+{% macro snowflake__execution_plan_order_limit_clause(order_expr, top_n) %}
+    order by {{ order_expr }}
+    {%- if top_n is not none %}
+    limit {{ top_n }}
+    {%- endif %}
+{% endmacro %}
+
+
 {% macro snowflake__print_execution_plan(query_id, format, min_pct=none, top_n=none) %}
 
     {#
@@ -23,9 +66,11 @@
         arg is passed, at which point sorting by time% descending is what
         makes the filter useful.
     #}
-    {%- set pct_expr = 'execution_time_breakdown:"overall_percentage"::float' -%}
+    {%- set pct_expr = dbt_query_profiler.snowflake__overall_pct_expr() -%}
     {%- set order_by_pct = min_pct is not none or top_n is not none -%}
     {%- set order_expr = (pct_expr ~ ' desc') if order_by_pct else 'operator_id' -%}
+    {%- set where_clause = dbt_query_profiler.snowflake__execution_plan_where_clause(pct_expr, min_pct) -%}
+    {%- set order_limit_clause = dbt_query_profiler.snowflake__execution_plan_order_limit_clause(order_expr, top_n) -%}
 
     {% if format == 'text' %}
         {% set query %}
@@ -36,13 +81,8 @@
                 nvl(operator_statistics:"output_rows"::varchar, '-') as output_rows,
                 nvl(round({{ pct_expr }} * 100, 1)::varchar, '-') as pct
             from table(get_query_operator_stats('{{ query_id }}'))
-            {% if min_pct is not none %}
-            where nvl({{ pct_expr }} * 100, 0) >= {{ min_pct }}
-            {% endif %}
-            order by {{ order_expr }}
-            {% if top_n is not none %}
-            limit {{ top_n }}
-            {% endif %}
+            {{ where_clause }}
+            {{ order_limit_clause }}
         {% endset %}
 
         {% set results = run_query(query) %}
@@ -64,13 +104,8 @@
                 operator_statistics:"output_rows"::number as output_rows,
                 {{ pct_expr }} as pct
             from table(get_query_operator_stats('{{ query_id }}'))
-            {% if min_pct is not none %}
-            where nvl({{ pct_expr }} * 100, 0) >= {{ min_pct }}
-            {% endif %}
-            order by {{ order_expr }}
-            {% if top_n is not none %}
-            limit {{ top_n }}
-            {% endif %}
+            {{ where_clause }}
+            {{ order_limit_clause }}
         {% endset %}
 
         {% set results = run_query(query) %}
@@ -113,11 +148,8 @@
                 from (
                     select *
                     from table(get_query_operator_stats('{{ query_id }}'))
-                    {% if min_pct is not none %}
-                    where nvl({{ pct_expr }} * 100, 0) >= {{ min_pct }}
-                    {% endif %}
-                    order by {{ order_expr }}
-                    limit {{ top_n }}
+                    {{ where_clause }}
+                    {{ order_limit_clause }}
                 ) top_operators
             {% endset %}
         {% else %}
@@ -125,9 +157,7 @@
                 select
                     array_agg({{ object_expr }}) within group (order by {{ order_expr }}) as plan_json
                 from table(get_query_operator_stats('{{ query_id }}'))
-                {% if min_pct is not none %}
-                where nvl({{ pct_expr }} * 100, 0) >= {{ min_pct }}
-                {% endif %}
+                {{ where_clause }}
             {% endset %}
         {% endif %}
 
@@ -150,7 +180,7 @@
         operator_statistics:"input_rows"::number as input_rows,
         operator_statistics:"output_rows"::number as output_rows,
         operator_statistics:"spilling"::object as spilling_info,
-        execution_time_breakdown:"overall_percentage"::float as overall_percentage
+        {{ dbt_query_profiler.snowflake__overall_pct_expr() }} as overall_percentage
     from table(get_query_operator_stats('{{ query_id }}'))
     order by operator_id
 {% endmacro %}
@@ -166,6 +196,10 @@
 #}
 {% macro snowflake__print_execution_plan_summary(query_id, format) %}
 
+    {%- set pct_expr = dbt_query_profiler.snowflake__overall_pct_expr() -%}
+    {%- set spill_local_expr = dbt_query_profiler.snowflake__spill_local_expr() -%}
+    {%- set spill_remote_expr = dbt_query_profiler.snowflake__spill_remote_expr() -%}
+
     {% if format == 'text' %}
         {% set query %}
             select
@@ -173,9 +207,9 @@
                 operator_type,
                 nvl(operator_statistics:"input_rows"::varchar, '-') as input_rows,
                 nvl(operator_statistics:"output_rows"::varchar, '-') as output_rows,
-                nvl(round(execution_time_breakdown:"overall_percentage"::float * 100, 1)::varchar, '-') as pct,
-                nvl(operator_statistics:"spilling":"bytes_spilled_local_storage"::varchar, '-') as spill_local,
-                nvl(operator_statistics:"spilling":"bytes_spilled_remote_storage"::varchar, '-') as spill_remote
+                nvl(round({{ pct_expr }} * 100, 1)::varchar, '-') as pct,
+                nvl({{ spill_local_expr }}::varchar, '-') as spill_local,
+                nvl({{ spill_remote_expr }}::varchar, '-') as spill_remote
             from table(get_query_operator_stats('{{ query_id }}'))
             order by operator_id
         {% endset %}
@@ -197,9 +231,9 @@
                 operator_type,
                 operator_statistics:"input_rows"::number as input_rows,
                 operator_statistics:"output_rows"::number as output_rows,
-                execution_time_breakdown:"overall_percentage"::float as pct,
-                operator_statistics:"spilling":"bytes_spilled_local_storage"::number as spill_local,
-                operator_statistics:"spilling":"bytes_spilled_remote_storage"::number as spill_remote
+                {{ pct_expr }} as pct,
+                {{ spill_local_expr }}::number as spill_local,
+                {{ spill_remote_expr }}::number as spill_remote
             from table(get_query_operator_stats('{{ query_id }}'))
             order by operator_id
         {% endset %}
@@ -231,7 +265,7 @@
                         'operator_type', operator_type,
                         'input_rows', operator_statistics:"input_rows"::number,
                         'output_rows', operator_statistics:"output_rows"::number,
-                        'overall_percentage', execution_time_breakdown:"overall_percentage"::float,
+                        'overall_percentage', {{ pct_expr }},
                         'spilling_info', operator_statistics:"spilling"::object
                     )
                 ) within group (order by operator_id) as plan_json
