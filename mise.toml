@@ -16,7 +16,7 @@ run = "uv sync"
 [tasks.test]
 description = "Run the DuckDB integration loop (build, test, run-operations)"
 dir = "integration_tests"
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles", DUCKDB_PATH = "target/t.duckdb" }
+env = { DBT_PROJECT_DIR = "{{ config_root }}/integration_tests", DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles", DUCKDB_PATH = "target/t.duckdb" }
 run = [
     "uv run dbt deps --target duckdb",
     "uv run dbt build --select tag:setup --full-refresh --target duckdb",
@@ -26,4 +26,7 @@ run = [
 
 [tasks.compile]
 description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
+# DuckDB works with no credentials; cloud adapters read their own vars from your
+# environment. tox has changedir=integration_tests, so DBT_PROFILES_DIR is absolute.
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles", DUCKDB_PATH = ":memory:" }
 run = "uv run tox -e compile_{{ arg(name='adapter', default='duckdb') }}"

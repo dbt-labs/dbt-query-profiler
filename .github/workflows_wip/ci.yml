@@ -11,7 +11,7 @@ on:
     branches: [main]
 
 env:
-  PYTHON_VERSION: "3.11"
+  # Python version comes from .python-version, which uv reads automatically.
   # Absolute path: tox runs with changedir=integration_tests, so a relative
   # profiles dir would resolve against the wrong directory.
   DBT_PROFILES_DIR: ${{ github.workspace }}/integration_tests/profiles
@@ -36,7 +36,6 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # astral-sh/setup-uv@v10.0.1
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
       - name: Install the adapter dependency group
@@ -82,7 +81,6 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # astral-sh/setup-uv@v10.0.1
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
       - name: Install dev dependencies (includes dbt-duckdb)

@@ -6,18 +6,20 @@ This repo pins its toolchain with [mise](https://mise.jdx.dev/) (`.python-versio
 + `mise.toml`) and manages Python dependencies with [uv](https://docs.astral.sh/uv/)
 (`pyproject.toml` + `uv.lock`). Python 3.11 is the supported version.
 
-Install the pinned Python and uv, then sync the dev dependencies (dbt-duckdb, tox):
+If you use mise, the whole loop is three tasks:
 
 ```bash
-mise install   # optional — installs Python 3.11 and uv; skip if you manage these yourself
-uv sync        # creates .venv and installs the default (dev) dependency group
+mise install     # installs Python 3.11 and uv
+mise run setup   # creates .venv and installs the dev dependencies (dbt-duckdb, tox)
+mise run test    # runs the full DuckDB loop: dbt deps, build, test, run-operations
 ```
 
-The integration tests live in `integration_tests/` and run against a real warehouse.
-DuckDB needs no credentials and is the fastest loop. Prefix commands with `uv run` so
-they use the project virtualenv:
+Without mise, run the same steps with uv directly. The integration tests live in
+`integration_tests/` and run against a real warehouse; DuckDB needs no credentials
+and is the fastest loop. Prefix dbt with `uv run` so it uses the project virtualenv:
 
 ```bash
+uv sync
 cd integration_tests
 export DBT_PROFILES_DIR="$PWD/profiles" DUCKDB_PATH=target/t.duckdb
 uv run dbt deps --target duckdb
@@ -26,13 +28,12 @@ uv run dbt test --target duckdb
 uv run bash scripts/test_run_operations.sh duckdb
 ```
 
-Or run the whole DuckDB loop in one step with `mise run test`.
-
 `integration_tests/profiles/profiles.yml` reads every credential from environment variables; see `profiles.yml.example` for the full list.
 
 Cloud adapters are optional dependency groups — install one on demand, e.g.
 `uv sync --group snowflake`, then run its compile or integration env with
 `uv run tox -e compile_snowflake` / `uv run tox -e dbt_integration_snowflake`.
+For a quick parse-only check of one adapter, use `mise run compile snowflake`.
 
 ## Submitting a change
 
