@@ -1,0 +1,29 @@
+# Tool versions and dev tasks for dbt-query-profiler.
+# Run `mise install` to get Python + uv, then `mise run setup` (or `uv sync`).
+
+[tools]
+python = "3.11"
+uv = "latest"
+
+[env]
+# Activate the uv-managed virtualenv so dbt, tox, etc. are on PATH.
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.setup]
+description = "Create the virtualenv and install dev dependencies"
+run = "uv sync"
+
+[tasks.test]
+description = "Run the DuckDB integration loop (build, test, run-operations)"
+dir = "integration_tests"
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles", DUCKDB_PATH = "target/t.duckdb" }
+run = [
+    "uv run dbt deps --target duckdb",
+    "uv run dbt build --select tag:setup --full-refresh --target duckdb",
+    "uv run dbt test --target duckdb",
+    "uv run bash scripts/test_run_operations.sh duckdb",
+]
+
+[tasks.compile]
+description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
+run = "uv run tox -e compile_{{ arg(name='adapter', default='duckdb') }}"

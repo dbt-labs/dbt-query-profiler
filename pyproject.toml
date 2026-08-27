@@ -1,0 +1,43 @@
+[project]
+name = "dbt-query-profiler"
+version = "0.1.0"
+description = "A dbt package for querying and analyzing query history and execution plans across data warehouses."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+# This is a dbt (Jinja/SQL) package, so it ships no Python runtime dependencies.
+# The adapters below are dev-only, used to compile and integration-test the macros.
+dependencies = []
+
+[dependency-groups]
+# Cloud adapters — install one on demand, e.g. `uv sync --group snowflake`.
+bigquery = ["dbt-bigquery>=1.9"]
+databricks = ["dbt-databricks>=1.9"]
+# Default group (installed by a plain `uv sync`): the DuckDB adapter plus the tox
+# runner. DuckDB needs no credentials and is the fast local loop; tox drives the
+# compile/integration matrix and tox-uv makes tox build its environments with uv.
+dev = [
+    { include-group = "duckdb" },
+    "tox>=4",
+    "tox-uv>=1.11",
+]
+# Split out as its own group so CI can install any adapter uniformly by name.
+duckdb = ["dbt-duckdb>=1.9"]
+redshift = ["dbt-redshift>=1.9"]
+snowflake = ["dbt-snowflake>=1.9"]
+
+[tool.uv]
+# Virtual project: install the dependency groups, but don't build or install this
+# repo itself as a Python package (it is a dbt package, not a Python one).
+package = false
+# The cloud adapters pin overlapping dependencies (agate, protobuf, ...) at
+# incompatible versions, so they cannot share one resolution. Declaring them
+# conflicting lets uv lock each independently; CI installs a single adapter per leg.
+conflicts = [
+    [
+        { group = "bigquery" },
+        { group = "databricks" },
+        { group = "redshift" },
+        { group = "snowflake" },
+    ],
+]

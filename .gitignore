@@ -1,3 +1,6 @@
-target/
-logs/
+.mise.local.toml
+.user.yml
+.venv/
 dbt_internal_packages/
+logs/
+target/
