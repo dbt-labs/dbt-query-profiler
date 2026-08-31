@@ -23,9 +23,25 @@ sequence. `integration_tests/profiles/profiles.yml` reads every credential from
 environment variables; see `profiles.yml.example` for the full list.
 
 If your local `profiles.yml` target for an adapter is named differently than the
-adapter itself (e.g. a personal `snowflake_dev` target), override it per run instead
-of renaming the target CI expects: `DBT_TARGET_SNOWFLAKE=snowflake_dev mise run
-test:snowflake`.
+adapter itself (e.g. a personal `snowflake_dev` target), or you keep your own
+`profiles.yml` outside this repo entirely, override it per run instead of renaming
+the target CI expects:
+
+```bash
+DBT_PROFILES_DIR=~/.dbt DBT_TARGET_SNOWFLAKE=snowflake_dev mise run test:snowflake
+```
+
+To avoid repeating that on every run, put the same variables in a `.mise.local.toml`
+at the repo root (gitignored, never committed) instead:
+
+```toml
+[env]
+DBT_PROFILES_DIR = "/absolute/path/to/your/.dbt"   # ~ is not expanded, use an absolute path
+DBT_TARGET_SNOWFLAKE = "snowflake_dev"
+```
+
+mise merges it on top of `mise.toml` automatically, so `mise run test:snowflake`
+alone then picks up your target with no env vars on the command line.
 
 For a quick parse-only check of one adapter (no credentials, no full build), use
 `mise run compile snowflake`.
@@ -34,6 +50,21 @@ The `test:<adapter>` task names match the `test_runner: "mise"` contract from
 [dbt-labs/dbt-package-testing](https://github.com/dbt-labs/dbt-package-testing) — the
 same tasks are what CI will call once `.github/workflows_wip/ci.yml` is promoted to
 an active workflow.
+
+## Testing against dbt Fusion
+
+`test:fusion-<adapter>` tasks (e.g. `mise run test:fusion-snowflake`) run the same
+loop against the [dbt Fusion](https://github.com/dbt-labs/fs) engine instead of dbt
+Core, matching dbt-package-testing's `run_tox_fusion.yml` mise contract. They expect
+a Fusion `dbt` binary already on your machine — install it with:
+
+```bash
+curl -fsSL https://public.cdn.getdbt.com/fs/install/install.sh | sh
+```
+
+which installs to `~/.local/bin/dbt`. The same `DBT_TARGET_<ADAPTER>` and
+`DBT_PROFILES_DIR` overrides (including via `.mise.local.toml`) apply to the Fusion
+tasks too. If your Fusion binary lives somewhere else, set `DBT_FUSION_BIN_DIR`.
 
 ## Submitting a change
 
