@@ -1,0 +1,211 @@
+# Tool versions and dev tasks for dbt-query-profiler.
+# Run `mise install` to get Python + uv, then `mise run setup` (or `uv sync`).
+#
+# The `test:<adapter>` tasks below follow the mise contract expected by
+# dbt-labs/dbt-package-testing's reusable CI workflows (test_runner: "mise"),
+# so the exact same tasks run locally and in CI once it's wired up. That
+# workflow puts a plain `dbt` on PATH before calling these tasks; locally,
+# `dbt` resolves the same way because [env] below activates the uv-managed
+# virtualenv - so the task commands never need a `uv run` prefix.
+#
+# Two things are overridable per run, so your personal setup doesn't have to
+# match CI's naming - mise's task-level `env` always wins over anything
+# exported in your shell, so these use a shell fallback (`${VAR:-default}`)
+# inside `run` instead of a static `env` value:
+#   - DBT_PROFILES_DIR: defaults to this repo's integration_tests/profiles.
+#     Point it at your own profiles.yml instead, e.g. ~/.dbt if that's where
+#     you keep an `integration_tests` profile with your own target names.
+#   - DBT_TARGET_<ADAPTER>: defaults to the adapter name (e.g. "snowflake").
+#     Override it to match your target name, e.g. DBT_TARGET_SNOWFLAKE=snow.
+#
+# Example: run the Snowflake loop against your own profiles.yml with your
+# own target name "snow":
+#   DBT_PROFILES_DIR=~/.dbt DBT_TARGET_SNOWFLAKE=snow mise run test:snowflake
+#
+# The `test:fusion-<adapter>` tasks run the same loop against the dbt Fusion
+# engine instead of dbt Core, matching dbt-package-testing's run_tox_fusion.yml
+# mise contract. They expect a Fusion `dbt` binary already installed (e.g. via
+# https://public.cdn.getdbt.com/fs/install/install.sh, which installs to
+# ~/.local/bin/dbt) - CI installs its own copy before calling these tasks.
+# Since dbt Core's `dbt` is also on PATH (via [env] below), these tasks
+# prepend Fusion's bin dir so it takes precedence; override the dir with
+# DBT_FUSION_BIN_DIR if yours lives somewhere else.
+
+[tools]
+python = "3.11"
+uv = "latest"
+
+[env]
+# Activate the uv-managed virtualenv so dbt is on PATH.
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.setup]
+description = "Create the virtualenv and install dev dependencies"
+run = "uv sync"
+
+[tasks."test:all"]
+description = "Install every adapter (uv sync --all-groups) and run every adapter's integration loop in sequence (Core)"
+run = '''
+set -e
+uv sync --all-groups
+for adapter in duckdb snowflake bigquery databricks redshift; do
+    echo "=== $adapter ==="
+    mise run "test:$adapter"
+done
+'''
+
+[tasks.compile]
+description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
+dir = "integration_tests"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+export DUCKDB_PATH="${DUCKDB_PATH:-:memory:}"
+target="${DBT_TARGET_{{ arg(name='adapter', default='duckdb') | upper }}:-{{ arg(name='adapter', default='duckdb') }}}"
+dbt deps --target "$target"
+dbt parse --target "$target"
+'''
+
+[tasks."test:duckdb"]
+description = "Run the DuckDB integration loop (build, test, run-operations)"
+dir = "integration_tests"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_DUCKDB:-duckdb}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt duckdb
+'''
+
+[tasks."test:snowflake"]
+description = "Run the Snowflake integration loop"
+dir = "integration_tests"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_SNOWFLAKE:-snowflake}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt snowflake
+'''
+
+[tasks."test:bigquery"]
+description = "Run the BigQuery integration loop"
+dir = "integration_tests"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_BIGQUERY:-bigquery}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt bigquery
+'''
+
+[tasks."test:databricks"]
+description = "Run the Databricks integration loop"
+dir = "integration_tests"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_DATABRICKS:-databricks}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt databricks
+'''
+
+[tasks."test:redshift"]
+description = "Run the Redshift integration loop"
+dir = "integration_tests"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_REDSHIFT:-redshift}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt redshift
+'''
+
+[tasks."test:fusion-duckdb"]
+description = "Run the DuckDB integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_DUCKDB:-duckdb}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt duckdb
+'''
+
+[tasks."test:fusion-snowflake"]
+description = "Run the Snowflake integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_SNOWFLAKE:-snowflake}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt snowflake
+'''
+
+[tasks."test:fusion-bigquery"]
+description = "Run the BigQuery integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_BIGQUERY:-bigquery}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt bigquery
+'''
+
+[tasks."test:fusion-databricks"]
+description = "Run the Databricks integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_DATABRICKS:-databricks}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt databricks
+'''
+
+[tasks."test:fusion-redshift"]
+description = "Run the Redshift integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_REDSHIFT:-redshift}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt redshift
+'''
