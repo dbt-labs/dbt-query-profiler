@@ -43,6 +43,18 @@ _.python.venv = { path = ".venv", create = true }
 description = "Create the virtualenv and install dev dependencies"
 run = "uv sync"
 
+[tasks."test:all"]
+description = "Run every adapter's integration loop in sequence (Core). The cloud adapter dependency groups conflict with each other (pyproject.toml [tool.uv].conflicts), so this re-syncs between each one instead of installing them all at once."
+run = '''
+set -e
+mise run test:duckdb
+for adapter in snowflake bigquery databricks redshift; do
+    echo "=== $adapter ==="
+    uv sync --group "$adapter"
+    mise run "test:$adapter"
+done
+'''
+
 [tasks.compile]
 description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
 run = '''
