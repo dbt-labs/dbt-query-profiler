@@ -14,14 +14,11 @@ dependencies = []
 # all of them at once with `uv sync --all-groups` (used by `mise run test:all`).
 bigquery = ["dbt-bigquery>=1.9"]
 databricks = ["dbt-databricks>=1.9"]
-# Default group (installed by a plain `uv sync`): the DuckDB adapter plus the tox
-# runner. DuckDB needs no credentials and is the fast local loop. Integration tests
-# run via mise tasks (see mise.toml); tox (with tox-uv) is only used by the
-# `mise run compile <adapter>` fast parse-only check.
+# Default group (installed by a plain `uv sync`): the DuckDB adapter. DuckDB needs
+# no credentials and is the fast local loop. Integration tests and the parse-only
+# `mise run compile <adapter>` check both run via mise tasks (see mise.toml).
 dev = [
     { include-group = "duckdb" },
-    "tox>=4",
-    "tox-uv>=1.11",
 ]
 # Split out as its own group so CI can install any adapter uniformly by name.
 duckdb = ["dbt-duckdb>=1.9"]

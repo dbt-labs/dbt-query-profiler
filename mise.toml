@@ -36,7 +36,7 @@ python = "3.11"
 uv = "latest"
 
 [env]
-# Activate the uv-managed virtualenv so dbt, tox, etc. are on PATH.
+# Activate the uv-managed virtualenv so dbt is on PATH.
 _.python.venv = { path = ".venv", create = true }
 
 [tasks.setup]
@@ -56,10 +56,13 @@ done
 
 [tasks.compile]
 description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
+dir = "integration_tests"
 run = '''
 export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 export DUCKDB_PATH="${DUCKDB_PATH:-:memory:}"
-uv run tox -e compile_{{ arg(name='adapter', default='duckdb') }}
+target="${DBT_TARGET_{{ arg(name='adapter', default='duckdb') | upper }}:-{{ arg(name='adapter', default='duckdb') }}}"
+dbt deps --target "$target"
+dbt parse --target "$target"
 '''
 
 [tasks."test:duckdb"]
