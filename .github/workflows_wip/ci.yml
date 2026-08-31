@@ -16,6 +16,12 @@ env:
   # profiles dir would resolve against the wrong directory.
   DBT_PROFILES_DIR: ${{ github.workspace }}/integration_tests/profiles
 
+# Cancel superseded runs: a new push to a branch stops the previous run's matrix
+# instead of letting it finish alongside the new one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
