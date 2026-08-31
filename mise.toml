@@ -1,0 +1,102 @@
+# Tool versions and dev tasks for dbt-query-profiler.
+# Run `mise install` to get Python + uv, then `mise run setup` (or `uv sync`).
+#
+# The `test:<adapter>` tasks below follow the mise contract expected by
+# dbt-labs/dbt-package-testing's reusable CI workflows (test_runner: "mise"),
+# so the exact same tasks run locally and in CI once it's wired up. That
+# workflow puts a plain `dbt` on PATH before calling these tasks; locally,
+# `dbt` resolves the same way because [env] below activates the uv-managed
+# virtualenv - so the task commands never need a `uv run` prefix.
+#
+# If your local profiles.yml target for an adapter is named differently from
+# the adapter itself (e.g. a personal `snowflake_dev` target), override it with
+# DBT_TARGET_<ADAPTER>, e.g.: DBT_TARGET_SNOWFLAKE=snowflake_dev mise run test:snowflake
+
+[tools]
+python = "3.11"
+uv = "latest"
+
+[env]
+# Activate the uv-managed virtualenv so dbt, tox, etc. are on PATH.
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.setup]
+description = "Create the virtualenv and install dev dependencies"
+run = "uv sync"
+
+[tasks.compile]
+description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
+# DuckDB works with no credentials; cloud adapters read their own vars from your
+# environment. tox has changedir=integration_tests, so DBT_PROFILES_DIR is absolute.
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles", DUCKDB_PATH = ":memory:" }
+run = "uv run tox -e compile_{{ arg(name='adapter', default='duckdb') }}"
+
+[tasks."test:duckdb"]
+description = "Run the DuckDB integration loop (build, test, run-operations)"
+dir = "integration_tests"
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
+run = '''
+target="${DBT_TARGET_DUCKDB:-duckdb}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt duckdb
+'''
+
+[tasks."test:snowflake"]
+description = "Run the Snowflake integration loop"
+dir = "integration_tests"
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
+run = '''
+target="${DBT_TARGET_SNOWFLAKE:-snowflake}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt snowflake
+'''
+
+[tasks."test:bigquery"]
+description = "Run the BigQuery integration loop"
+dir = "integration_tests"
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
+run = '''
+target="${DBT_TARGET_BIGQUERY:-bigquery}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt bigquery
+'''
+
+[tasks."test:databricks"]
+description = "Run the Databricks integration loop"
+dir = "integration_tests"
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
+run = '''
+target="${DBT_TARGET_DATABRICKS:-databricks}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt databricks
+'''
+
+[tasks."test:redshift"]
+description = "Run the Redshift integration loop"
+dir = "integration_tests"
+env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
+run = '''
+target="${DBT_TARGET_REDSHIFT:-redshift}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt redshift
+'''

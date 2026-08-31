@@ -2,20 +2,36 @@
 
 ## Getting set up
 
-The integration tests live in `integration_tests/` and run against a real warehouse. DuckDB needs no credentials and is the fastest loop:
+This repo pins its toolchain with [mise](https://mise.jdx.dev/) (`.python-version`
++ `mise.toml`) and manages Python dependencies with [uv](https://docs.astral.sh/uv/)
+(`pyproject.toml` + `uv.lock`). Python 3.11 is the supported version.
+
+The integration tests live in `integration_tests/` and run against a real warehouse.
+DuckDB needs no credentials and is the fastest loop:
 
 ```bash
-uv venv --python 3.11 dbtenv
-uv pip install --python ./dbtenv/bin/python dbt-duckdb
-
-cd integration_tests
-export DBT_PROFILES_DIR=$PWD/profiles DUCKDB_PATH=target/t.duckdb
-dbt build --select tag:setup --full-refresh --target duckdb
-dbt test --target duckdb
-bash scripts/test_run_operations.sh duckdb
+mise install         # installs Python 3.11 and uv
+mise run setup        # creates .venv and installs the dev dependencies
+mise run test:duckdb  # dbt deps, build, test, run-operations against DuckDB
 ```
 
-`integration_tests/profiles/profiles.yml` reads every credential from environment variables; see `profiles.yml.example` for the full list.
+Once you have credentials for a cloud adapter, install its dependency group and run
+its own task the same way, e.g. `uv sync --group snowflake` then `mise run
+test:snowflake`. `integration_tests/profiles/profiles.yml` reads every credential
+from environment variables; see `profiles.yml.example` for the full list.
+
+If your local `profiles.yml` target for an adapter is named differently than the
+adapter itself (e.g. a personal `snowflake_dev` target), override it per run instead
+of renaming the target CI expects: `DBT_TARGET_SNOWFLAKE=snowflake_dev mise run
+test:snowflake`.
+
+For a quick parse-only check of one adapter (no credentials, no full build), use
+`mise run compile snowflake`.
+
+The `test:<adapter>` task names match the `test_runner: "mise"` contract from
+[dbt-labs/dbt-package-testing](https://github.com/dbt-labs/dbt-package-testing) — the
+same tasks are what CI will call once `.github/workflows_wip/ci.yml` is promoted to
+an active workflow.
 
 ## Submitting a change
 
@@ -40,4 +56,4 @@ bash scripts/test_run_operations.sh duckdb
 
 ## Adding an adapter
 
-`.claude/skills/adding-new-adapters-support-for-dbt-query-profiling/` documents the macro set to implement and the naming pattern. In short: implement `{adapter}__` versions of the macros in `macros/_core/`, add the adapter to `supported_adapters.env`, and add a target to `integration_tests/profiles/profiles.yml`.
+`.claude/skills/adding-new-adapters-support-for-dbt-query-profiling/` documents the macro set to implement and the naming pattern. In short: implement `{adapter}__` versions of the macros in `macros/_core/`, add the adapter to `supported_adapters.env`, add a target to `integration_tests/profiles/profiles.yml`, add a `dbt-{adapter}` dependency group to `pyproject.toml`, and add a `test:{adapter}` task to `mise.toml`.

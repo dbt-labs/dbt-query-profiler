@@ -1,117 +1,61 @@
-# CI workflow - runs on every PR and push to main
-# Tier 1: Compilation tests for all adapters (no credentials needed)
-# Tier 2: DuckDB integration tests (free, local)
+# CI workflow - runs the dbt-labs/dbt-package-testing reusable workflow against
+# every supported adapter, invoked via mise's `test:<adapter>` tasks (mise.toml).
+#
+# Kept in workflows_wip/ (not .github/workflows/) so it does not actually run
+# yet - see mise.toml and CONTRIBUTING.md to run these tasks locally instead.
 
 name: CI
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-
-env:
-  PYTHON_VERSION: "3.11"
-  DBT_PROFILES_DIR: ./integration_tests/profiles
-
-# Cancel superseded runs: a new push to a branch stops the previous run's matrix
-# instead of letting it finish alongside the new one.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  pull_request_target:
 
 permissions:
   contents: read
 
+# Cancel superseded runs: a new push to a branch stops the previous run's matrix
+# instead of letting it finish alongside the new one. run_tox.yml doesn't manage
+# this itself, so it's the caller's responsibility.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # Tier 1: Verify macros compile for all adapters
-  compile:
-    name: Compile (${{ matrix.adapter }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        adapter: [snowflake, bigquery, databricks, redshift, duckdb]
-        include:
-          - adapter: snowflake
-            dbt_package: dbt-snowflake
-          - adapter: bigquery
-            dbt_package: dbt-bigquery
-          - adapter: databricks
-            dbt_package: dbt-databricks
-          - adapter: redshift
-            dbt_package: dbt-redshift
-          - adapter: duckdb
-            dbt_package: dbt-duckdb
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dbt
-        run: |
-          python -m pip install --upgrade pip
-          pip install ${{ matrix.dbt_package }}
-
-      - name: Install tox
-        run: pip install tox
-
-      - name: Run compilation test
-        run: tox -e compile_${{ matrix.adapter }}
-        # `dbt parse` renders profiles.yml, whose env_var() calls have no defaults, so
-        # it fails on a missing variable before it ever reaches the macros. Parsing
-        # never opens a connection, so placeholders are enough - and keeping them
-        # obviously fake avoids any suggestion that this tier talks to a warehouse.
-        # Real credentials live in integration.yml, which is not triggered by pull_request.
-        env:
-          SNOWFLAKE_ACCOUNT: not-a-real-account
-          SNOWFLAKE_USER: ci
-          DBT_ENV_SECRET_SNOWFLAKE_PASS: ci
-          SNOWFLAKE_ROLE: ci
-          SNOWFLAKE_DATABASE: ci
-          SNOWFLAKE_WAREHOUSE: ci
-          BIGQUERY_PROJECT: not-a-real-project
-          BIGQUERY_KEYFILE_JSON: "{}"
-          BIGQUERY_LOCATION: US
-          DATABRICKS_HOST: not-a-real-host
-          DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/ci
-          DBT_ENV_SECRET_DATABRICKS_TOKEN: ci
-          DATABRICKS_CATALOG: ci
-          REDSHIFT_HOST: not-a-real-host
-          REDSHIFT_USER: ci
-          DBT_ENV_SECRET_REDSHIFT_PASS: ci
-          REDSHIFT_DATABASE: ci
-          REDSHIFT_PORT: "5439"
-
-  # Tier 2: Full integration tests with DuckDB
-  integration-duckdb:
-    name: Integration (DuckDB)
-    runs-on: ubuntu-latest
-    needs: [compile]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dbt-duckdb
-        run: |
-          python -m pip install --upgrade pip
-          pip install dbt-duckdb
-
-      - name: Install tox
-        run: pip install tox
-
-      - name: Run DuckDB integration tests
-        run: tox -e dbt_integration_duckdb
-        env:
-          DUCKDB_PATH: ":memory:"
+  core-tests:
+    uses: dbt-labs/dbt-package-testing/.github/workflows/run_tox.yml@v2
+    with:
+      adapters: "duckdb,snowflake,bigquery,databricks,redshift"
+      test_runner: "mise"
+      # Fork PRs need `pull_request_target` to get secrets; gate that behind an
+      # approved environment so a maintainer signs off before secrets are used.
+      environment: >-
+        ${{ github.event_name == 'pull_request_target'
+            && github.event.pull_request.head.repo.full_name != github.repository
+            && 'cloud-tests' || '' }}
+      ref: ${{ github.event.pull_request.head.sha || '' }}
+      # snowflake
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER }}
+      SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_WAREHOUSE: ${{ vars.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+      # bigquery
+      BIGQUERY_PROJECT: ${{ vars.BIGQUERY_PROJECT }}
+      BIGQUERY_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+      # databricks
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}
+      DATABRICKS_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+      # redshift
+      REDSHIFT_HOST: ${{ vars.REDSHIFT_HOST }}
+      REDSHIFT_USER: ${{ vars.REDSHIFT_USER }}
+      REDSHIFT_DATABASE: ${{ vars.REDSHIFT_DATABASE }}
+      REDSHIFT_PORT: ${{ vars.REDSHIFT_PORT }}
+      REDSHIFT_SCHEMA: "dbt_query_profiler_${{ github.run_number }}"
+    secrets:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      DBT_ENV_SECRET_SNOWFLAKE_PASS: ${{ secrets.DBT_ENV_SECRET_SNOWFLAKE_PASS }}
+      BIGQUERY_KEYFILE_JSON: ${{ secrets.BIGQUERY_KEYFILE_JSON }}
+      DBT_ENV_SECRET_DATABRICKS_TOKEN: ${{ secrets.DBT_ENV_SECRET_DATABRICKS_TOKEN }}
+      DBT_ENV_SECRET_REDSHIFT_PASS: ${{ secrets.DBT_ENV_SECRET_REDSHIFT_PASS }}
