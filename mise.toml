@@ -21,6 +21,15 @@
 # Example: run the Snowflake loop against your own profiles.yml with your
 # own target name "snow":
 #   DBT_PROFILES_DIR=~/.dbt DBT_TARGET_SNOWFLAKE=snow mise run test:snowflake
+#
+# The `test:fusion-<adapter>` tasks run the same loop against the dbt Fusion
+# engine instead of dbt Core, matching dbt-package-testing's run_tox_fusion.yml
+# mise contract. They expect a Fusion `dbt` binary already installed (e.g. via
+# https://public.cdn.getdbt.com/fs/install/install.sh, which installs to
+# ~/.local/bin/dbt) - CI installs its own copy before calling these tasks.
+# Since dbt Core's `dbt` is also on PATH (via [env] below), these tasks
+# prepend Fusion's bin dir so it takes precedence; override the dir with
+# DBT_FUSION_BIN_DIR if yours lives somewhere else.
 
 [tools]
 python = "3.11"
@@ -102,6 +111,81 @@ bash scripts/test_run_operations.sh "$target" dbt databricks
 description = "Run the Redshift integration loop"
 dir = "integration_tests"
 run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_REDSHIFT:-redshift}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt redshift
+'''
+
+[tasks."test:fusion-duckdb"]
+description = "Run the DuckDB integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_DUCKDB:-duckdb}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt duckdb
+'''
+
+[tasks."test:fusion-snowflake"]
+description = "Run the Snowflake integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_SNOWFLAKE:-snowflake}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt snowflake
+'''
+
+[tasks."test:fusion-bigquery"]
+description = "Run the BigQuery integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_BIGQUERY:-bigquery}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt bigquery
+'''
+
+[tasks."test:fusion-databricks"]
+description = "Run the Databricks integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+target="${DBT_TARGET_DATABRICKS:-databricks}"
+dbt --version
+dbt deps --target "$target"
+dbt debug --target "$target"
+dbt build --select tag:setup --full-refresh --target "$target"
+dbt test --target "$target"
+bash scripts/test_run_operations.sh "$target" dbt databricks
+'''
+
+[tasks."test:fusion-redshift"]
+description = "Run the Redshift integration loop against dbt Fusion"
+dir = "integration_tests"
+run = '''
+export PATH="${DBT_FUSION_BIN_DIR:-$HOME/.local/bin}:$PATH"
 export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 target="${DBT_TARGET_REDSHIFT:-redshift}"
 dbt --version
