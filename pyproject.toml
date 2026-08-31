@@ -10,7 +10,8 @@ requires-python = ">=3.11"
 dependencies = []
 
 [dependency-groups]
-# Cloud adapters — install one on demand, e.g. `uv sync --group snowflake`.
+# Cloud adapters — install one on demand, e.g. `uv sync --group snowflake`, or
+# all of them at once with `uv sync --all-groups` (used by `mise run test:all`).
 bigquery = ["dbt-bigquery>=1.9"]
 databricks = ["dbt-databricks>=1.9"]
 # Default group (installed by a plain `uv sync`): the DuckDB adapter plus the tox
@@ -31,14 +32,3 @@ snowflake = ["dbt-snowflake>=1.9"]
 # Virtual project: install the dependency groups, but don't build or install this
 # repo itself as a Python package (it is a dbt package, not a Python one).
 package = false
-# The cloud adapters pin overlapping dependencies (agate, protobuf, ...) at
-# incompatible versions, so they cannot share one resolution. Declaring them
-# conflicting lets uv lock each independently; CI installs a single adapter per leg.
-conflicts = [
-    [
-        { group = "bigquery" },
-        { group = "databricks" },
-        { group = "redshift" },
-        { group = "snowflake" },
-    ],
-]

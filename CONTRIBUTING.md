@@ -17,8 +17,10 @@ mise run test:duckdb  # dbt deps, build, test, run-operations against DuckDB
 
 Once you have credentials for a cloud adapter, install its dependency group and run
 its own task the same way, e.g. `uv sync --group snowflake` then `mise run
-test:snowflake`. `integration_tests/profiles/profiles.yml` reads every credential
-from environment variables; see `profiles.yml.example` for the full list.
+test:snowflake`. To run every adapter one after another, use `mise run test:all` -
+it runs `uv sync --all-groups` for you, then every `test:<adapter>` task in
+sequence. `integration_tests/profiles/profiles.yml` reads every credential from
+environment variables; see `profiles.yml.example` for the full list.
 
 If your local `profiles.yml` target for an adapter is named differently than the
 adapter itself (e.g. a personal `snowflake_dev` target), override it per run instead
