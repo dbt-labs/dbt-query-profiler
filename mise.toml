@@ -8,9 +8,19 @@
 # `dbt` resolves the same way because [env] below activates the uv-managed
 # virtualenv - so the task commands never need a `uv run` prefix.
 #
-# If your local profiles.yml target for an adapter is named differently from
-# the adapter itself (e.g. a personal `snowflake_dev` target), override it with
-# DBT_TARGET_<ADAPTER>, e.g.: DBT_TARGET_SNOWFLAKE=snowflake_dev mise run test:snowflake
+# Two things are overridable per run, so your personal setup doesn't have to
+# match CI's naming - mise's task-level `env` always wins over anything
+# exported in your shell, so these use a shell fallback (`${VAR:-default}`)
+# inside `run` instead of a static `env` value:
+#   - DBT_PROFILES_DIR: defaults to this repo's integration_tests/profiles.
+#     Point it at your own profiles.yml instead, e.g. ~/.dbt if that's where
+#     you keep an `integration_tests` profile with your own target names.
+#   - DBT_TARGET_<ADAPTER>: defaults to the adapter name (e.g. "snowflake").
+#     Override it to match your target name, e.g. DBT_TARGET_SNOWFLAKE=snow.
+#
+# Example: run the Snowflake loop against your own profiles.yml with your
+# own target name "snow":
+#   DBT_PROFILES_DIR=~/.dbt DBT_TARGET_SNOWFLAKE=snow mise run test:snowflake
 
 [tools]
 python = "3.11"
@@ -26,16 +36,17 @@ run = "uv sync"
 
 [tasks.compile]
 description = "Parse macros for one adapter (default duckdb), e.g. mise run compile snowflake"
-# DuckDB works with no credentials; cloud adapters read their own vars from your
-# environment. tox has changedir=integration_tests, so DBT_PROFILES_DIR is absolute.
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles", DUCKDB_PATH = ":memory:" }
-run = "uv run tox -e compile_{{ arg(name='adapter', default='duckdb') }}"
+run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
+export DUCKDB_PATH="${DUCKDB_PATH:-:memory:}"
+uv run tox -e compile_{{ arg(name='adapter', default='duckdb') }}
+'''
 
 [tasks."test:duckdb"]
 description = "Run the DuckDB integration loop (build, test, run-operations)"
 dir = "integration_tests"
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
 run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 target="${DBT_TARGET_DUCKDB:-duckdb}"
 dbt --version
 dbt deps --target "$target"
@@ -48,8 +59,8 @@ bash scripts/test_run_operations.sh "$target" dbt duckdb
 [tasks."test:snowflake"]
 description = "Run the Snowflake integration loop"
 dir = "integration_tests"
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
 run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 target="${DBT_TARGET_SNOWFLAKE:-snowflake}"
 dbt --version
 dbt deps --target "$target"
@@ -62,8 +73,8 @@ bash scripts/test_run_operations.sh "$target" dbt snowflake
 [tasks."test:bigquery"]
 description = "Run the BigQuery integration loop"
 dir = "integration_tests"
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
 run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 target="${DBT_TARGET_BIGQUERY:-bigquery}"
 dbt --version
 dbt deps --target "$target"
@@ -76,8 +87,8 @@ bash scripts/test_run_operations.sh "$target" dbt bigquery
 [tasks."test:databricks"]
 description = "Run the Databricks integration loop"
 dir = "integration_tests"
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
 run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 target="${DBT_TARGET_DATABRICKS:-databricks}"
 dbt --version
 dbt deps --target "$target"
@@ -90,8 +101,8 @@ bash scripts/test_run_operations.sh "$target" dbt databricks
 [tasks."test:redshift"]
 description = "Run the Redshift integration loop"
 dir = "integration_tests"
-env = { DBT_PROFILES_DIR = "{{ config_root }}/integration_tests/profiles" }
 run = '''
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-{{ config_root }}/integration_tests/profiles}"
 target="${DBT_TARGET_REDSHIFT:-redshift}"
 dbt --version
 dbt deps --target "$target"
