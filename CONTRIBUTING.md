@@ -90,3 +90,7 @@ tasks too. If your Fusion binary lives somewhere else, set `DBT_FUSION_BIN_DIR`.
 ## Adding an adapter
 
 `.claude/skills/adding-new-adapters-support-for-dbt-query-profiling/` documents the macro set to implement and the naming pattern. In short: implement `{adapter}__` versions of the macros in `macros/_core/`, add the adapter to `supported_adapters.env`, add a target to `integration_tests/profiles/profiles.yml`, add a `dbt-{adapter}` dependency group to `pyproject.toml`, and add a `test:{adapter}` task to `mise.toml`.
+
+## Agent skills
+
+`skills/` is shipped to users: on dbt v2, `dbt deps` installs everything in it into their project. Only put user-facing skills there. Contributor-only skills, like the adapter one above, stay in `.claude/skills/` so they are never installed into user projects. A skill's `name` must match its directory name, or dbt skips it with a warning.
