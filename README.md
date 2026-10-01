@@ -42,13 +42,35 @@ Behind one interface, this package encodes five warehouses' native query-history
 
 Every macro is a plain `dbt run-operation`, so it is equally usable by hand. Agents benefit most from the multi-model sweeps, where a human would be copying query IDs between commands.
 
-Optional companion skill, so an agent knows the workflow. Run from your **main project directory** (where `dbt_packages/` lives):
+### Companion skill
 
-```bash
-npx skills add ./dbt_packages/dbt_query_profiler/.claude/skills/using-dbt-query-profiler-package
+The package ships one optional agent skill, `using-dbt-query-profiler-package`, which teaches an agent the triage workflow (find the query, check the plan, check the stats). Nothing else depends on it; the macros behave the same without it.
+
+**dbt v2:** `dbt deps` installs it for you once your root project says which agent to install skills for:
+
+```yaml
+# dbt_project.yml (your project, not the package)
+flags:
+  ai_provider: claude   # or a list, e.g. [claude, codex]
 ```
 
-This installs the `using-dbt-query-profiler-package` skill. Nothing else depends on it; the macros behave the same without it.
+`claude` installs to `.claude/skills`; `wizard`, `openai`, `codex`, `cursor` and `gemini` install to `.agents/skills`. Without `ai_provider`, dbt warns and installs nothing. See [dbt's docs on package skills](https://docs.getdbt.com/docs/dbt-ai/package-skills?version=2).
+
+- **Opt out:** disable it in your root `dbt_project.yml`:
+  ```yaml
+  skills:
+    dbt_query_profiler:
+      using-dbt-query-profiler-package:
+        +enabled: false
+  ```
+- **Remove it:** `dbt clean` deletes installed skills that dbt manages.
+- **Customize it:** dbt overwrites its installed copy on every install. To keep local edits, delete the `dbt.*` entries from the skill's `metadata` frontmatter.
+
+**dbt Core 1.x:** `dbt deps` ignores skills. Run this from your **main project directory** (where `dbt_packages/` lives):
+
+```bash
+npx skills add ./dbt_packages/dbt_query_profiler/skills/using-dbt-query-profiler-package
+```
 
 ## Installation
 
